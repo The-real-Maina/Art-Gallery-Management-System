@@ -1,0 +1,12 @@
+
+{
+  "name": "art-gallery-server",
+  "version": "1.0.0",
+  "description": "Art Gallery Management System Backend",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  }
+}
