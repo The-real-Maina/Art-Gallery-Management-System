@@ -301,8 +301,8 @@ function Dashboard() {
                 <PlusCircle size={16} /> Book a visit
               </Link>
             )}
-            {/* UPDATED: Directs directly to the artworks section */}
-            <Link to="/#artworks" className="primary-button" style={{ background: 'transparent', color: '#25231f', border: '1px solid #e8e3da', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* CHANGED: /#artworks -> /artworks */}
+            <Link to="/artworks" className="primary-button" style={{ background: 'transparent', color: '#25231f', border: '1px solid #e8e3da', display: 'flex', alignItems: 'center', gap: '8px' }}>
               Explore gallery <ArrowRight size={16} />
             </Link>
           </div>
@@ -355,8 +355,8 @@ function Dashboard() {
                   <Compass size={48} style={{ color: '#a47745', margin: '0 auto 15px', opacity: 0.8 }} />
                   <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px' }}>No exhibitions scheduled</h3>
                   <p style={{ maxWidth: '400px', margin: '10px auto 20px' }}>The gallery is currently preparing for our next big showcase. Check back soon to explore new exhibitions!</p>
-                  {/* UPDATED: Directs directly to the artworks section */}
-                  <Link to="/#artworks" className="primary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  {/* CHANGED: /#artworks -> /artworks */}
+                  <Link to="/artworks" className="primary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                     Explore past artworks <ArrowRight size={16} />
                   </Link>
                 </div>
@@ -457,13 +457,13 @@ function Dashboard() {
             <section className="dashboard-section">
               <div className="section-heading">
                 <div><span className="eyebrow">YOUR COLLECTION</span><h2>Saved artworks</h2></div>
-                {/* UPDATED: Directs directly to the artworks section */}
-                <Link to="/#artworks" className="dashboard-text-link">Discover art <ArrowRight size={15} /></Link>
+                {/* CHANGED: /#artworks -> /artworks */}
+                <Link to="/artworks" className="dashboard-text-link">Discover art <ArrowRight size={15} /></Link>
               </div>
               {favourites.length === 0 ? (
                 <div className="dashboard-empty"><Heart size={30} /><h3>Your collection starts here</h3>
-                  {/* UPDATED: Directs directly to the artworks section */}
-                  <Link to="/#artworks" className="primary-button">Explore artworks</Link>
+                  {/* CHANGED: /#artworks -> /artworks */}
+                  <Link to="/artworks" className="primary-button">Explore artworks</Link>
                 </div>
               ) : (
                 <div className="dashboard-bookings-list">

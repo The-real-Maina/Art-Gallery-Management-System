@@ -9,17 +9,19 @@ function ExhibitionsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchExhibitions = async () => {
       try {
         const res = await api.get('/exhibitions/public');
-        setExhibitions(res.data.exhibitions || []);
+        if (isMounted) setExhibitions(res.data.exhibitions || []);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchExhibitions();
+    return () => { isMounted = false; };
   }, []);
 
   const formatDate = (start, end) => {

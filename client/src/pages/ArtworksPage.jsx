@@ -24,22 +24,26 @@ function ArtworksPage() {
   const [inquirySuccess, setInquirySuccess] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
     const fetchData = async () => {
       try {
         const [artRes, favRes] = await Promise.all([
           api.get('/artworks/public'),
           user?.role === 'Art Collector' ? api.get('/collectors/favourites') : Promise.resolve({ data: { favourites: [] } })
         ]);
-        setArtworks(artRes.data.artworks || []);
-        setFavourites(favRes.data.favourites || []);
+        if (isMounted) {
+          setArtworks(artRes.data.artworks || []);
+          setFavourites(favRes.data.favourites || []);
+        }
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchData();
-  }, [user?.role]); // Added user?.role here to fix ESLint warning
+    return () => { isMounted = false; };
+  }, [user?.role]);
 
   const handleToggleFavourite = async (e, artworkId) => {
     e.stopPropagation();

@@ -1,29 +1,29 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
-// Main Pages
-import Home from './pages/Home'; 
+// Public Pages
+import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import VisitBooking from './pages/VisitBooking';
-import UserManagement from './pages/UserManagement';
 import ForgotPassword from './pages/ForgotPassword'; 
 import GalleryDetails from './pages/GalleryDetails'; 
 import ExhibitionDetail from './pages/ExhibitionDetail'; 
 
-// Public Solo Pages
+// Solo Public Pages
 import ArtworksPage from './pages/ArtworksPage';
 import ExhibitionsPage from './pages/ExhibitionsPage';
 import ArtistsPage from './pages/ArtistsPage';
 import ContactPage from './pages/ContactPage';
 
-// Dashboards
+// Dashboards & Admin
 import Dashboard from './pages/Dashboard';
 import ArtistDashboard from './pages/ArtistDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import CuratorDashboard from './pages/CuratorDashboard';
 import BookingOfficerDashboard from './pages/BookingOfficerDashboard';
 import TourGuideDashboard from './pages/TourGuideDashboard';
+import UserManagement from './pages/UserManagement';
 
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
@@ -81,8 +81,10 @@ export default function Root() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        {/* DASHBOARDS & ADMIN */}
+        {/* DASHBOARD */}
         <Route path="/dashboard" element={<DashboardRouter />} />
+        
+        {/* ADMIN SPECIFIC */}
         <Route path="/admin/users" element={<UserManagement />} />
       </Routes>
     </BrowserRouter>

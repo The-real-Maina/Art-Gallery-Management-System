@@ -19,7 +19,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
   const isBooking = user?.role === 'Booking Officer';
   const isGuide = user?.role === 'Tour Guide';
 
-  // THE FIX: Route to /dashboard if clicking a workspace tab from a public page
+  // Route to /dashboard if clicking a workspace tab from a public page
   const handleTabChange = (tab) => {
     if (setActiveTab) setActiveTab(tab);
     if (setMenuOpen) setMenuOpen(false);
@@ -35,6 +35,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
   return (
     <aside className={`dashboard-sidebar ${menuOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
       
+      {/* HEADER: Logo toggles the sidebar */}
       <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
         <div 
           onClick={() => setIsCollapsed(!isCollapsed)} 
@@ -52,6 +53,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
         <>
           <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block' }}>WORKSPACE</div>
           <nav className="dashboard-nav">
+            
+            {/* VISITOR / COLLECTOR */}
             {(isVisitor || isCollector) && (
               <>
                 <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
@@ -91,6 +94,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
               </>
             )}
 
+            {/* ADMINISTRATOR */}
             {isAdmin && (
               <>
                 <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
@@ -105,12 +109,16 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
                 <button className={activeTab === 'audit' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('audit')} title="Audit Logs">
                   <FileText size={19} /> {!isCollapsed && <span>Audit Logs</span>}
                 </button>
+                
                 <div style={{ height: '1px', background: '#3a3831', margin: '10px 0' }} />
+                
                 <Link to="/admin/users" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/admin/users' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/admin/users' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Manage Users">
                   <Users size={19} /> {!isCollapsed && <span>Manage Users</span>}
                 </Link>
               </>
             )}
+
+            {/* CURATOR */}
             {isCurator && (
               <>
                 <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
@@ -124,6 +132,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
                 </button>
               </>
             )}
+
+            {/* BOOKING OFFICER */}
             {isBooking && (
               <>
                 <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
@@ -134,6 +144,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
                 </button>
               </>
             )}
+
+            {/* TOUR GUIDE */}
             {isGuide && (
               <>
                 <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
@@ -151,26 +163,31 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
         </>
       )}
 
-      {/* DISCOVER GALLERY */}
-      <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block', marginTop: user ? '25px' : '10px' }}>DISCOVER GALLERY</div>
-      <nav className="dashboard-nav">
-        <Link to="/artworks" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artworks' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artworks' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="All Artworks">
-          <ImageIcon size={19} /> {!isCollapsed && <span>All Artworks</span>}
-        </Link>
-        <Link to="/exhibitions" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/exhibitions' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/exhibitions' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Exhibitions">
-          <Compass size={19} /> {!isCollapsed && <span>Exhibitions</span>}
-        </Link>
-        <Link to="/artists" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artists' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artists' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Meet the Artists">
-          <Users size={19} /> {!isCollapsed && <span>Meet the Artists</span>}
-        </Link>
-        <Link to="/contact" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/contact' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/contact' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Contact & Inquiries">
-          <Mail size={19} /> {!isCollapsed && <span>Contact & Inquiries</span>}
-        </Link>
-        <Link to="/gallery-details" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/gallery-details' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/gallery-details' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="The Gallery">
-          <Palette size={19} /> {!isCollapsed && <span>The Gallery</span>}
-        </Link>
-      </nav>
+      {/* DISCOVER GALLERY (ONLY FOR VISITORS & COLLECTORS) */}
+      {(isVisitor || isCollector) && (
+        <>
+          <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block', marginTop: '25px' }}>DISCOVER GALLERY</div>
+          <nav className="dashboard-nav">
+            <Link to="/artworks" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artworks' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artworks' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="All Artworks">
+              <ImageIcon size={19} /> {!isCollapsed && <span>All Artworks</span>}
+            </Link>
+            <Link to="/exhibitions" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/exhibitions' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/exhibitions' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Exhibitions">
+              <Compass size={19} /> {!isCollapsed && <span>Exhibitions</span>}
+            </Link>
+            <Link to="/artists" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artists' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artists' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Meet the Artists">
+              <Users size={19} /> {!isCollapsed && <span>Meet the Artists</span>}
+            </Link>
+            <Link to="/contact" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/contact' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/contact' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Contact & Inquiries">
+              <Mail size={19} /> {!isCollapsed && <span>Contact & Inquiries</span>}
+            </Link>
+            <Link to="/gallery-details" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/gallery-details' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/gallery-details' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="The Gallery">
+              <Palette size={19} /> {!isCollapsed && <span>The Gallery</span>}
+            </Link>
+          </nav>
+        </>
+      )}
 
+      {/* BOTTOM SECTION: User Info OR Login */}
       <div className="sidebar-bottom" style={{ padding: isCollapsed ? '20px 10px' : '20px' }}>
         {user ? (
           <>

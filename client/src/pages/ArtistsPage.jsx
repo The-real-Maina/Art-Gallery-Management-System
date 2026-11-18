@@ -8,17 +8,19 @@ function ArtistsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchArtists = async () => {
       try {
         const res = await api.get('/artists/public');
-        setArtists(res.data.artists || []);
+        if (isMounted) setArtists(res.data.artists || []);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     fetchArtists();
+    return () => { isMounted = false; };
   }, []);
 
   return (
