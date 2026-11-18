@@ -88,12 +88,17 @@ exports.login = (req, res) => {
         return res.json({ success: true, token, user: { user_id: user.user_id, full_name: user.full_name, email: user.email, role: user.role_name } });
       }
 
-      // 2. VISITOR CHECK
-      if (user.role_name === 'Visitor' && user.account_status === 'Inactive') {
-        return res.status(403).json({ success: false, message: 'Please verify your email with the OTP sent during registration.' });
+      // 2. VISITOR BYPASSES OTP ON LOGIN
+      if (user.role_name === 'Visitor') {
+        if (user.account_status === 'Inactive') {
+          return res.status(403).json({ success: false, message: 'Please verify your email with the OTP sent during registration.' });
+        }
+        
+        const token = jwt.sign({ user_id: user.user_id, role: user.role_name }, process.env.JWT_SECRET, { expiresIn: '30m' });
+        return res.json({ success: true, token, user: { user_id: user.user_id, full_name: user.full_name, email: user.email, role: user.role_name } });
       }
 
-      // 3. REQUIRE OTP
+      // 3. ALL OTHER ROLES REQUIRE OTP
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -171,7 +176,7 @@ exports.forgotPassword = (req, res) => {
       }
 
       const otp = generateOTP();
-      const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
       db.query(
         `UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE user_id = ?`,
@@ -230,6 +235,84 @@ exports.resetPassword = async (req, res) => {
           }
 
           return res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
+        }
+      );
+    }
+  );
+};
+
+// REQUEST PASSWORD CHANGE (From Dashboard)
+exports.requestPasswordChange = (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user_id = req.user.user_id;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Current and new password are required.' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, message: 'New password must be at least 8 characters.' });
+  }
+
+  db.query(
+    `SELECT users.*, roles.role_name FROM users INNER JOIN roles ON users.role_id = roles.role_id WHERE users.user_id = ?`,
+    [user_id],
+    async (error, results) => {
+      if (error || results.length === 0) return res.status(404).json({ success: false, message: 'User not found.' });
+
+      const user = results[0];
+      const passwordMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!passwordMatch) return res.status(401).json({ success: false, message: 'Incorrect current password.' });
+
+      // 1. ADMIN BYPASS: Change password immediately without OTP
+      if (user.role_name === 'Administrator') {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        db.query('UPDATE users SET password = ? WHERE user_id = ?', [hashedPassword, user_id], (updErr) => {
+          if (updErr) return res.status(500).json({ success: false, message: 'Failed to update password.' });
+          return res.json({ success: true, message: 'Password changed successfully.' });
+        });
+        return;
+      }
+
+      // 2. OTHER ROLES: Generate OTP
+      const otp = generateOTP();
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+      db.query(`UPDATE users SET otp_code = ?, otp_expires_at = ? WHERE user_id = ?`, [otp, otpExpires, user_id], (updErr) => {
+        if (updErr) return res.status(500).json({ success: false, message: 'Failed to generate OTP.' });
+        
+        printOTPToTerminal(user.email, otp);
+        return res.json({ success: true, require_otp: true, message: 'OTP sent to terminal for verification.' });
+      });
+    }
+  );
+};
+
+// VERIFY PASSWORD CHANGE (Step 2)
+exports.verifyPasswordChange = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Email, OTP, and new password are required.' });
+  }
+
+  db.query(
+    `SELECT user_id, otp_expires_at FROM users WHERE email = ? AND otp_code = ?`,
+    [email.trim().toLowerCase(), String(otp).trim()],
+    async (error, results) => {
+      if (error || results.length === 0) return res.status(401).json({ success: false, message: 'Invalid OTP.' });
+
+      const user = results[0];
+      if (new Date(user.otp_expires_at) < new Date()) {
+        return res.status(401).json({ success: false, message: 'OTP has expired. Please request a new one.' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      db.query(
+        `UPDATE users SET password = ?, otp_code = NULL, otp_expires_at = NULL WHERE user_id = ?`,
+        [hashedPassword, user.user_id],
+        (updateErr) => {
+          if (updateErr) return res.status(500).json({ success: false, message: 'Failed to update password.' });
+          return res.json({ success: true, message: 'Password updated successfully.' });
         }
       );
     }

@@ -33,6 +33,27 @@ router.get('/profile', protect, (req, res) => {
   );
 });
 
+// UPDATE LOGGED-IN USER PROFILE (NEW)
+router.put('/profile', protect, (req, res) => {
+  const { full_name } = req.body;
+
+  if (!full_name || !full_name.trim()) {
+    return res.status(400).json({ success: false, message: 'Full name is required.' });
+  }
+
+  db.query(
+    'UPDATE users SET full_name = ? WHERE user_id = ?',
+    [full_name.trim(), req.user.user_id],
+    (error, result) => {
+      if (error) {
+        console.error('Profile update error:', error);
+        return res.status(500).json({ success: false, message: 'Could not update profile.' });
+      }
+      return res.json({ success: true, message: 'Profile updated successfully.', full_name: full_name.trim() });
+    }
+  );
+});
+
 // ADMINISTRATOR: GET ALL USERS
 router.get('/', protect, authorize('Administrator'), (req, res) => {
   db.query(

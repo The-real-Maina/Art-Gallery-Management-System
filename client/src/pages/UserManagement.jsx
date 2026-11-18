@@ -1,337 +1,141 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Users, Search, RefreshCw, ShieldCheck, UserRound, Palette, AlertCircle, LoaderCircle, ArrowLeft, CheckCircle, Ban, PlusCircle, X
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Palette, LoaderCircle, Compass, Filter } from 'lucide-react';
 import api from '../services/api';
+import Lightbox from '../components/Lightbox';
 
-function UserManagement() {
-  const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('All Roles');
-  const [statusFilter, setStatusFilter] = useState('All Statuses');
+function Home() {
+  const [artworks, setArtworks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [updatingId, setUpdatingId] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  // Modal & Create State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  // Default to Administrator (id: 3)
-  const [newUser, setNewUser] = useState({ full_name: '', email: '', password: '', role_id: 3 });
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState('');
-
-  // ALL ROLES (Used for the dropdown in the table, in case Admin needs to promote a Visitor)
-  const allRoles = [
-    { id: 1, name: 'Visitor' },
-    { id: 2, name: 'Artist' },
-    { id: 3, name: 'Administrator' },
-    { id: 4, name: 'Gallery Curator' },
-    { id: 5, name: 'Tour Guide' },
-    { id: 6, name: 'Art Collector' },
-    { id: 7, name: 'Booking Officer' }
-  ];
-
-  // STAFF ROLES ONLY (Used for the "Create Staff" modal)
-  const staffRoles = [
-    { id: 3, name: 'Administrator' },
-    { id: 4, name: 'Gallery Curator' },
-    { id: 5, name: 'Tour Guide' },
-    { id: 7, name: 'Booking Officer' }
-  ];
+  
+  // Lightbox State
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  
+  // Filter State
+  const [artistFilter, setArtistFilter] = useState('All');
 
   useEffect(() => {
-    let ignore = false;
-
-    const loadUsers = async () => {
+    const loadArtworks = async () => {
       try {
-        const response = await api.get('/users');
-        if (!ignore) {
-          setUsers(response.data.users || []);
-          setError('');
-        }
+        const res = await api.get('/artworks/public');
+        setArtworks(res.data.artworks || []);
       } catch (err) {
-        if (!ignore) setError(err.response?.data?.message || err.message || 'Unable to retrieve users.');
+        console.error('Failed to load artworks', err);
       } finally {
-        if (!ignore) setLoading(false);
+        setLoading(false);
       }
     };
+    loadArtworks();
+  }, []);
 
-    loadUsers();
-    return () => { ignore = true; };
-  }, [reloadKey]);
+  const uniqueArtists = ['All', ...new Set(artworks.map(a => a.artist_name))];
+  const filteredArtworks = artistFilter === 'All' 
+    ? artworks 
+    : artworks.filter(a => a.artist_name === artistFilter);
 
-  const handleRefresh = () => {
-    setLoading(true);
-    setError('');
-    setReloadKey(k => k + 1);
-  };
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    setCreateLoading(true);
-    setCreateError('');
-
-    try {
-      await api.post('/users', newUser);
-      setIsModalOpen(false);
-      setNewUser({ full_name: '', email: '', password: '', role_id: 3 });
-      handleRefresh();
-    } catch (err) {
-      setCreateError(err.response?.data?.message || 'Failed to create user.');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
-  // Unified update function for both Role and Status
-  const handleUpdateUser = async (userId, field, value) => {
-    try {
-      setUpdatingId(userId);
-      const payload = field === 'role' ? { role_id: value } : { account_status: value };
-      
-      await api.put(`/users/${userId}/update`, payload);
-      
-      setUsers(previous => previous.map(user => {
-        if (user.user_id === userId) {
-          if (field === 'role') {
-            const roleName = allRoles.find(r => r.id === value)?.name;
-            return { ...user, role_name: roleName };
-          } else {
-            return { ...user, account_status: value };
-          }
-        }
-        return user;
-      }));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Could not update user.');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const roles = useMemo(() => [
-    'All Roles', ...new Set(users.map(user => user.role_name))
-  ], [users]);
-
-  const filteredUsers = useMemo(() => {
-    return users.filter(user => {
-      const matchesSearch =
-        user.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase());
-      const matchesRole = roleFilter === 'All Roles' || user.role_name === roleFilter;
-      const matchesStatus = statusFilter === 'All Statuses' || user.account_status === statusFilter;
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [users, search, roleFilter, statusFilter]);
-
-  const getRoleIcon = role => {
-    if (role === 'Administrator') return <ShieldCheck size={15} />;
-    if (role === 'Artist') return <Palette size={15} />;
-    return <UserRound size={15} />;
-  };
-
-  const getStatusStyle = status => {
-    if (status === 'Active') return 'bg-green-50 text-green-700';
-    if (status === 'Suspended') return 'bg-red-50 text-red-700';
-    return 'bg-amber-50 text-amber-700';
-  };
+  const user = JSON.parse(localStorage.getItem('art_gallery_user') || 'null');
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4] text-[#25231f]">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9e5dc] bg-white px-6 py-5 md:px-10">
+    <div style={{ background: '#faf9f6', minHeight: '100vh', paddingBottom: '80px' }}>
+      {/* HEADER */}
+      <header style={{ padding: '25px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e8e3da', background: 'white' }}>
+        <Link to="/" className="brand">
+          <span className="brand-icon"><Palette size={22} /></span>
+          <span>ARTISAN<span className="brand-light">.</span></span>
+        </Link>
         <div>
-          <Link to="/dashboard" className="mb-3 inline-flex items-center gap-2 text-sm text-[#8b806d] hover:text-[#b28a45]">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </Link>
-          <h1 className="font-serif text-3xl font-semibold">User Management</h1>
-          <p className="mt-1 text-sm text-[#89857d]">Manage gallery members, staff and account access.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 rounded-lg bg-[#a47745] px-5 py-3 text-sm font-medium text-white hover:bg-[#805b34] transition">
-            <PlusCircle size={16} /> Add New Staff
-          </button>
-          <button onClick={handleRefresh} disabled={loading} className="flex items-center gap-2 rounded-lg bg-[#292720] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
+          {user ? (
+            <Link to="/dashboard" className="primary-button" style={{ padding: '10px 20px' }}>Go to Dashboard</Link>
+          ) : (
+            <div style={{ display: 'flex', gap: '15px' }}>
+              <Link to="/login" style={{ padding: '10px 20px', color: '#25231f', fontWeight: 'bold' }}>Sign In</Link>
+              <Link to="/register" className="primary-button" style={{ padding: '10px 20px' }}>Create Account</Link>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-9 md:px-10">
-        <div className="mb-8 grid gap-5 sm:grid-cols-3">
-          <StatCard label="Total Users" value={users.length} icon={<Users size={24} />} />
-          <StatCard label="Active Accounts" value={users.filter(user => user.account_status === 'Active').length} icon={<CheckCircle size={24} />} />
-          <StatCard label="Suspended Accounts" value={users.filter(user => user.account_status === 'Suspended').length} icon={<Ban size={24} />} />
-        </div>
+      {/* HERO SECTION */}
+      <section style={{ textAlign: 'center', padding: '80px 20px', background: '#25231f', color: 'white' }}>
+        <span className="eyebrow" style={{ color: '#a47745' }}>WELCOME TO ARTISAN</span>
+        <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '56px', margin: '15px 0' }}>Discover Extraordinary <em style={{ color: '#a47745' }}>Art.</em></h1>
+        <p style={{ color: '#bcb9b0', maxWidth: '600px', margin: '0 auto 30px' }}>Explore our curated collection of contemporary masterpieces from Africa's finest artists.</p>
+        <Link to="/book-visit" className="primary-button" style={{ padding: '14px 30px', fontSize: '16px' }}>Plan a Gallery Visit</Link>
+      </section>
 
-        <section className="overflow-hidden rounded-xl border border-[#e9e5dc] bg-white">
-          <div className="flex flex-col justify-between gap-4 border-b border-[#eeeae2] p-6 lg:flex-row lg:items-center">
-            <div>
-              <h2 className="text-lg font-semibold">Registered Users</h2>
-              <p className="mt-1 text-sm text-[#89857d]">Showing {filteredUsers.length} of {users.length} users</p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="flex items-center gap-2 rounded-lg border border-[#e7e2d9] px-3 py-2.5">
-                <Search size={17} className="text-[#999184]" />
-                <input type="text" placeholder="Search name or email..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-transparent text-sm outline-none sm:w-48" />
-              </div>
-              <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="rounded-lg border border-[#e7e2d9] bg-white px-3 py-2.5 text-sm">
-                {roles.map(role => <option key={role} value={role}>{role}</option>)}
-              </select>
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-lg border border-[#e7e2d9] bg-white px-3 py-2.5 text-sm">
-                {['All Statuses', 'Active', 'Inactive', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </div>
+      {/* ARTWORK GALLERY SECTION */}
+      <section style={{ maxWidth: '1200px', margin: '60px auto', padding: '0 20px' }} id="artworks">
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '40px', flexWrap: 'wrap', gap: '20px' }}>
+          <div>
+            <span className="eyebrow">EXPLORE THE COLLECTION</span>
+            <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: '36px', margin: 0 }}>Featured Artworks</h2>
           </div>
-
-          {loading ? (
-            <div className="flex flex-col items-center py-20 text-[#89857d]">
-              <LoaderCircle size={32} className="mb-3 animate-spin" /> Loading users...
-            </div>
-          ) : error ? (
-            <div className="px-6 py-20 text-center text-red-600">
-              <AlertCircle size={32} className="mx-auto mb-3" />
-              <p>{error}</p>
-              <button onClick={handleRefresh} className="mt-4 rounded-lg bg-[#292720] px-5 py-2 text-white">Try Again</button>
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="py-20 text-center text-[#89857d]">
-              <Users size={35} className="mx-auto mb-3 opacity-50" /> No users found.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left">
-                <thead className="bg-[#faf9f6] text-xs uppercase tracking-wider text-[#89857d]">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">User</th>
-                    <th className="px-6 py-4 font-medium">Email</th>
-                    <th className="px-6 py-4 font-medium">Role</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 font-medium">Account Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#eeeae2]">
-                  {filteredUsers.map(user => {
-                    const isAdmin = user.role_name === 'Administrator';
-                    return (
-                      <tr key={user.user_id} className="hover:bg-[#fcfbf8]">
-                        <td className="px-6 py-5 font-medium">
-                          {user.full_name}
-                          <p className="mt-1 text-xs text-[#999184]">ID: #{user.user_id}</p>
-                        </td>
-                        <td className="px-6 py-5 text-sm text-[#77736c]">{user.email}</td>
-                        <td className="px-6 py-5">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-[#f3f0e9] px-3 py-1.5 text-xs text-[#75613d]">
-                            {getRoleIcon(user.role_name)} {user.role_name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className={`rounded-full px-3 py-1.5 text-xs font-medium ${getStatusStyle(user.account_status)}`}>
-                            {user.account_status || 'Unknown'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          {isAdmin ? (
-                            <span className="text-xs text-[#999184]">Protected account</span>
-                          ) : (
-                            <div className="flex gap-2">
-                              {/* Role Selector (Uses ALL ROLES to allow upgrading Visitors) */}
-                              <select 
-                                value={allRoles.find(r => r.name === user.role_name)?.id || 1} 
-                                disabled={updatingId === user.user_id} 
-                                onChange={e => handleUpdateUser(user.user_id, 'role', Number(e.target.value))} 
-                                className="rounded-lg border border-[#e7e2d9] bg-white px-2 py-1.5 text-xs disabled:opacity-50"
-                              >
-                                {allRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                              </select>
-
-                              {/* Status Selector */}
-                              <select 
-                                value={user.account_status} 
-                                disabled={updatingId === user.user_id} 
-                                onChange={e => handleUpdateUser(user.user_id, 'status', e.target.value)} 
-                                className="rounded-lg border border-[#e7e2d9] bg-white px-2 py-1.5 text-xs disabled:opacity-50"
-                              >
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
-                                <option value="Suspended">Suspended</option>
-                              </select>
-                            </div>
-                          )}
-                          {updatingId === user.user_id && <LoaderCircle size={15} className="ml-2 inline animate-spin" />}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          
+          {/* ARTIST FILTER */}
+          {artworks.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'white', padding: '10px 15px', borderRadius: '8px', border: '1px solid #e8e3da' }}>
+              <Filter size={18} style={{ color: '#a47745' }} />
+              <select 
+                value={artistFilter} 
+                onChange={e => setArtistFilter(e.target.value)}
+                style={{ border: 'none', background: 'transparent', fontSize: '14px', outline: 'none', color: '#25231f', fontWeight: 'bold' }}
+              >
+                {uniqueArtists.map(artist => <option key={artist} value={artist}>{artist}</option>)}
+              </select>
             </div>
           )}
-        </section>
-      </main>
-
-      {/* CREATE STAFF MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 relative">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-gray-900 bg-gray-100 rounded-full p-1">
-              <X size={20} />
-            </button>
-            <h2 className="mb-4 font-serif text-2xl font-semibold">Add New Staff</h2>
-            <p className="mb-6 text-sm text-[#89857d]">
-              Create a new account for a staff member. 
-              <br/><br/>
-              <em className="text-xs text-[#a47745]">* Visitors, Artists, and Collectors must self-register on the public site.</em>
-            </p>
-
-            {createError && <div className="mb-4 rounded bg-red-50 p-3 text-sm text-red-600">{createError}</div>}
-
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Full Name</label>
-                <input type="text" required value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} className="w-full rounded-lg border border-[#e7e2d9] px-4 py-2 text-sm outline-none focus:border-[#a47745]" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Email</label>
-                <input type="email" required value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className="w-full rounded-lg border border-[#e7e2d9] px-4 py-2 text-sm outline-none focus:border-[#a47745]" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Password</label>
-                <input type="text" required minLength={8} value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="w-full rounded-lg border border-[#e7e2d9] px-4 py-2 text-sm outline-none focus:border-[#a47745]" placeholder="Min 8 characters" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Staff Role</label>
-                <select value={newUser.role_id} onChange={e => setNewUser({...newUser, role_id: Number(e.target.value)})} className="w-full rounded-lg border border-[#e7e2d9] bg-white px-4 py-2 text-sm outline-none focus:border-[#a47745]">
-                  {/* Uses STAFF ROLES ONLY */}
-                  {staffRoles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
-                </select>
-              </div>
-              <button type="submit" disabled={createLoading} className="w-full rounded-lg bg-[#a47745] py-3 text-sm font-medium text-white hover:bg-[#805b34] transition">
-                {createLoading ? 'Creating...' : 'Create Staff Account'}
-              </button>
-            </form>
-          </div>
         </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '100px 0' }}>
+            <LoaderCircle size={40} className="animate-spin" style={{ color: '#a47745', margin: '0 auto' }} />
+          </div>
+        ) : filteredArtworks.length === 0 ? (
+          <div className="dashboard-empty" style={{ background: 'white', borderRadius: '12px', padding: '60px' }}>
+            <Compass size={48} style={{ color: '#a47745', margin: '0 auto 15px' }} />
+            <h3>No artworks found</h3>
+            <p>There are currently no artworks to display for this filter.</p>
+          </div>
+        ) : (
+          /* THE GALLERY GRID */
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '30px' }}>
+            {filteredArtworks.map((art, index) => (
+              <div 
+                key={art.artwork_id} 
+                onClick={() => setLightboxIndex(index)}
+                style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', border: '1px solid #e8e3da', transition: 'transform 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <div style={{ height: '300px', overflow: 'hidden' }}>
+                  <img src={art.image_url} alt={art.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '22px', margin: '0 0 5px 0' }}>{art.title}</h3>
+                  <p style={{ color: '#a47745', fontWeight: 'bold', fontSize: '14px', margin: '0 0 15px 0' }}>{art.artist_name}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0ede6', paddingTop: '15px' }}>
+                    <span style={{ fontSize: '13px', color: '#777168' }}>{art.category}</span>
+                    <span style={{ fontWeight: 'bold', color: '#25231f' }}>KES {Number(art.price).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* LIGHTBOX OVERLAY */}
+      {lightboxIndex !== null && (
+        <Lightbox 
+          artworks={filteredArtworks} 
+          index={lightboxIndex} 
+          onClose={() => setLightboxIndex(null)} 
+          onNavigate={setLightboxIndex} 
+        />
       )}
     </div>
   );
 }
 
-function StatCard({ label, value, icon }) {
-  return (
-    <div className="rounded-xl border border-[#e9e5dc] bg-white p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-[#89857d]">{label}</p>
-          <h2 className="mt-2 text-3xl font-semibold">{value}</h2>
-        </div>
-        <div className="rounded-xl bg-[#f3eee4] p-4 text-[#a27b39]">{icon}</div>
-      </div>
-    </div>
-  );
-}
-
-export default UserManagement;
+export default Home;

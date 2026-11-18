@@ -2136,3 +2136,35 @@ h2 em {
   color: #777168;
   margin: 0;
 }
+/* Sidebar Collapse Animations */
+.dashboard-sidebar {
+  transition: width 0.3s ease, transform 0.3s ease;
+  overflow-x: hidden;
+}
+
+.dashboard-sidebar.collapsed {
+  width: 80px; /* Width when shrunk */
+}
+
+.dashboard-sidebar.collapsed .dashboard-nav button,
+.dashboard-sidebar.collapsed .dashboard-nav a {
+  justify-content: center;
+  padding: 13px 0;
+}
+
+.dashboard-sidebar.collapsed .sidebar-user {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-main {
+  transition: margin-left 0.3s ease, padding 0.3s ease;
+  flex: 1;
+}
+
+/* Hide the desktop collapse button on mobile */
+@media (max-width: 1024px) {
+  .desktop-collapse-btn {
+    display: none !important;
+  }
+}

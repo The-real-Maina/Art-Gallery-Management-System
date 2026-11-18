@@ -1,4 +1,3 @@
-
 const db = require('../config/db');
 
 const query = (sql, params = []) => {
@@ -44,6 +43,32 @@ const getAllExhibitions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Unable to retrieve exhibitions.'
+    });
+  }
+};
+
+// Get single exhibition details (NEW)
+const getExhibitionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exhibitions = await query(
+      `SELECT * FROM exhibitions WHERE exhibition_id = ?`,
+      [id]
+    );
+
+    if (exhibitions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Exhibition not found.'
+      });
+    }
+
+    res.json({ success: true, exhibition: exhibitions[0] });
+  } catch (error) {
+    console.error('Get exhibition error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Unable to retrieve exhibition.'
     });
   }
 };
@@ -311,6 +336,7 @@ const getExhibitionArtworks = async (req, res) => {
 module.exports = {
   getPublicExhibitions,
   getAllExhibitions,
+  getExhibitionById,        // <-- ADDED
   createExhibition,
   updateExhibition,
   addArtworkToExhibition,

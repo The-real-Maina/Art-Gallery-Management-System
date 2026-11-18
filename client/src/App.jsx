@@ -1,23 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight,
-  Search,
-  Menu,
-  X,
-  Heart,
-  Palette,
-  CalendarDays,
-  Users,
-  LoaderCircle,
-  AlertCircle,
-  MessageCircle,
-  CheckCircle,
-  Globe
+  ArrowRight, Search, Menu, X, Heart, Palette, CalendarDays, Users, 
+  LoaderCircle, AlertCircle, MessageCircle, CheckCircle, Globe, Filter, Compass
 } from 'lucide-react';
 
 import api from './services/api';
 import NotificationBell from './components/NotificationBell';
+import Lightbox from './components/Lightbox';
 import './index.css';
 
 function imageUrl(id, width = 800) {
@@ -28,19 +18,16 @@ function App() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  
+  const [artistFilter, setArtistFilter] = useState('All');
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
-  // Strictly validate the user object and clear stale data
   const [user] = useState(() => {
     try {
       const stored = localStorage.getItem('art_gallery_user');
       if (!stored) return null;
-      
       const parsed = JSON.parse(stored);
-      if (parsed && parsed.role) {
-        return parsed;
-      }
-      
-      // If parsed but missing role, it's invalid. Clear it.
+      if (parsed && parsed.role) return parsed;
       localStorage.removeItem('art_gallery_user');
       localStorage.removeItem('art_gallery_token');
       return null;
@@ -127,7 +114,8 @@ function App() {
     return () => { isMounted = false; };
   }, [user]);
 
-  const handleToggleFavourite = async (artworkId) => {
+  const handleToggleFavourite = async (e, artworkId) => {
+    e.stopPropagation();
     if (!user) return alert('Please log in to save artworks.');
     if (user.role !== 'Art Collector') return alert('Only Art Collectors can save favourites.');
 
@@ -173,10 +161,15 @@ function App() {
   };
 
   const categories = ['All', ...new Set(artworks.map((a) => a.category).filter(Boolean))];
+  const uniqueArtists = ['All', ...new Set(artworks.map(a => a.artist_name).filter(Boolean))];
+
   const filteredArtworks = artworks.filter((a) => {
     const matchesCategory = activeCategory === 'All' || a.category === activeCategory;
+    const matchesArtist = artistFilter === 'All' || a.artist_name === artistFilter;
     const term = search.toLowerCase();
-    return matchesCategory && ((a.title || '').toLowerCase().includes(term) || (a.artist_name || '').toLowerCase().includes(term));
+    const matchesSearch = (a.title || '').toLowerCase().includes(term) || (a.artist_name || '').toLowerCase().includes(term);
+    
+    return matchesCategory && matchesArtist && matchesSearch;
   });
 
   const formatPrice = (price) => price ? `KES ${Number(price).toLocaleString('en-KE')}` : 'Price on request';
@@ -200,10 +193,9 @@ function App() {
           <a href="#artworks" onClick={() => setMenuOpen(false)}>Artworks</a>
           <a href="#exhibitions" onClick={() => setMenuOpen(false)}>Exhibitions</a>
           <a href="#artists" onClick={() => setMenuOpen(false)}>Artists</a>
-          <a href="#about" onClick={() => setMenuOpen(false)}>About</a>
+          <Link to="/gallery-details" onClick={() => setMenuOpen(false)}>The Gallery</Link>
         </nav>
         
-        {/* FIXED NAVBAR LOGIC */}
         <div className="nav-actions">
           {user ? (
             <>
@@ -220,7 +212,6 @@ function App() {
       </header>
 
       <main>
-        {/* HERO */}
         <section className="hero" id="home">
           <div className="hero-content">
             <span className="eyebrow"><span className="eyebrow-line"></span>THE ART OF DISCOVERY</span>
@@ -256,7 +247,6 @@ function App() {
           <span>CELEBRATE CREATIVITY</span>
         </section>
 
-        {/* ARTWORKS */}
         <section className="section artworks-section" id="artworks">
           <div className="section-heading">
             <div>
@@ -265,31 +255,58 @@ function App() {
             </div>
           </div>
 
-          <div className="collection-tools">
-            <div className="category-tabs">
-              {categories.map((c) => <button key={c} className={activeCategory === c ? 'category-tab active' : 'category-tab'} onClick={() => setActiveCategory(c)}>{c}</button>)}
+          {artworks.length > 0 && (
+            <div className="collection-tools">
+              <div className="category-tabs">
+                {categories.map((c) => <button key={c} className={activeCategory === c ? 'category-tab active' : 'category-tab'} onClick={() => setActiveCategory(c)}>{c}</button>)}
+              </div>
+              
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div className="search-box" style={{ padding: '0 10px' }}>
+                  <Filter size={17} style={{ color: '#a47745' }} />
+                  <select 
+                    value={artistFilter} 
+                    onChange={(e) => setArtistFilter(e.target.value)}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', padding: '10px 5px', color: '#25231f', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+                  >
+                    {uniqueArtists.map(artist => <option key={artist} value={artist}>{artist === 'All' ? 'All Artists' : artist}</option>)}
+                  </select>
+                </div>
+
+                <div className="search-box">
+                  <Search size={17} />
+                  <input type="search" placeholder="Search artworks..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+              </div>
             </div>
-            <div className="search-box">
-              <Search size={17} />
-              <input type="search" placeholder="Search artworks..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-          </div>
+          )}
 
           {loadingArtworks ? (
-            <div className="empty-state"><LoaderCircle size={28} className="loading-spinner" /><p>Loading...</p></div>
+            <div className="empty-state"><LoaderCircle size={28} className="loading-spinner" /><p>Loading collection...</p></div>
           ) : artworkError ? (
             <div className="empty-state"><AlertCircle size={28} /><p>{artworkError}</p></div>
+          ) : filteredArtworks.length === 0 ? (
+            <div className="empty-state" style={{ padding: '60px 20px', background: '#faf9f6', borderRadius: '12px', border: '1px dashed #e8e3da' }}>
+              <Palette size={48} style={{ color: '#a47745', margin: '0 auto 15px', opacity: 0.8 }} />
+              <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px' }}>No artworks available</h3>
+              <p>Our curators are currently selecting the next collection. Check back soon!</p>
+            </div>
           ) : (
             <div className="artwork-grid">
-              {filteredArtworks.map((artwork) => {
+              {filteredArtworks.map((artwork, index) => {
                 const isFav = favourites.some(f => f.artwork_id === artwork.artwork_id);
                 return (
-                  <article className="artwork-card" key={artwork.artwork_id}>
+                  <article 
+                    className="artwork-card" 
+                    key={artwork.artwork_id}
+                    onClick={() => setLightboxIndex(index)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <div className="artwork-image">
                       <img src={artwork.image_url} alt={artwork.title} loading="lazy" />
                       <button
                         className={`favorite-button ${isFav ? 'selected' : ''}`}
-                        onClick={() => handleToggleFavourite(artwork.artwork_id)}
+                        onClick={(e) => handleToggleFavourite(e, artwork.artwork_id)}
                         disabled={isFavouriteLoading}
                       >
                         <Heart size={18} fill={isFav ? "currentColor" : "none"} />
@@ -306,7 +323,7 @@ function App() {
 
                     {user?.role === 'Art Collector' && (
                       <button
-                        onClick={() => setInquiryArtwork(artwork)}
+                        onClick={(e) => { e.stopPropagation(); setInquiryArtwork(artwork); }}
                         className="text-button"
                         style={{ marginTop: '10px', color: '#a47745', width: '100%', justifyContent: 'center', border: '1px solid #e8e3da', padding: '8px', background: 'transparent' }}
                       >
@@ -320,7 +337,6 @@ function App() {
           )}
         </section>
 
-        {/* EXHIBITIONS */}
         <section className="exhibition-section" id="exhibitions">
           <div className="section-heading">
             <div>
@@ -330,7 +346,13 @@ function App() {
           </div>
 
           {loadingExhibitions ? (
-            <div className="empty-state"><LoaderCircle size={28} className="loading-spinner" /><p>Loading...</p></div>
+            <div className="empty-state"><LoaderCircle size={28} className="loading-spinner" /><p>Loading exhibitions...</p></div>
+          ) : exhibitions.length === 0 ? (
+            <div className="empty-state" style={{ padding: '60px 20px', background: '#faf9f6', borderRadius: '12px', border: '1px dashed #e8e3da' }}>
+              <Compass size={48} style={{ color: '#a47745', margin: '0 auto 15px', opacity: 0.8 }} />
+              <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px' }}>No exhibitions scheduled</h3>
+              <p>The gallery is preparing for our next big showcase. Stay tuned!</p>
+            </div>
           ) : (
             <div className="exhibition-grid">
               {exhibitions.map((exhibition) => (
@@ -340,7 +362,7 @@ function App() {
                     <span>{formatDate(exhibition.start_date, exhibition.end_date)}</span>
                     <h3>{exhibition.title}</h3>
                     <p>{exhibition.description}</p>
-                    <a href="#booking">Discover exhibition <ArrowRight size={16} /></a>
+                    <Link to={`/exhibitions/${exhibition.exhibition_id}`}>Discover exhibition <ArrowRight size={16} /></Link>
                   </div>
                 </article>
               ))}
@@ -348,7 +370,6 @@ function App() {
           )}
         </section>
 
-        {/* ARTISTS SECTION */}
         <section className="section artists-section" id="artists">
           <div className="section-heading">
             <div>
@@ -360,7 +381,13 @@ function App() {
 
           {loadingArtists ? (
             <div className="empty-state"><LoaderCircle size={28} className="loading-spinner" /><p>Loading artists...</p></div>
-          ) : artists.length > 0 ? (
+          ) : artists.length === 0 ? (
+            <div className="empty-state" style={{ padding: '60px 20px', background: '#faf9f6', borderRadius: '12px', border: '1px dashed #e8e3da' }}>
+              <Users size={48} style={{ color: '#a47745', margin: '0 auto 15px', opacity: 0.8 }} />
+              <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px' }}>No artists to display</h3>
+              <p>Artist profiles will appear here once they join the gallery.</p>
+            </div>
+          ) : (
             <div className="artists-grid">
               {artists.map((artist) => (
                 <div className="artist-card" key={artist.artist_id || artist.user_id}>
@@ -380,16 +407,9 @@ function App() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="empty-state">
-              <Users size={35} />
-              <h3>No artists to display</h3>
-              <p>Artist profiles will appear here once they join the gallery.</p>
-            </div>
           )}
         </section>
 
-        {/* VISIT SECTION */}
         <section className="visit-section" id="booking">
           <div className="visit-icon"><CalendarDays size={27} /></div>
           <div>
@@ -400,14 +420,18 @@ function App() {
           <Link to="/book-visit" className="primary-button">Book a visit <ArrowRight size={17} /></Link>
         </section>
 
-        {/* ABOUT */}
         <section className="about-section" id="about">
           <div className="about-symbol"><Users size={34} /></div>
           <div>
             <span className="eyebrow">A COMMUNITY OF CREATIVITY</span>
             <h2>More than a gallery.<br /><em>A meeting place for art.</em></h2>
           </div>
-          <p>We connect artists, collectors and art lovers through meaningful exhibitions, creative discovery and shared experiences.</p>
+          <div>
+            <p style={{ marginBottom: '20px' }}>We connect artists, collectors and art lovers through meaningful exhibitions, creative discovery and shared experiences.</p>
+            <Link to="/gallery-details" className="text-button" style={{ fontWeight: 'bold' }}>
+              Learn more about our history <ArrowRight size={16} />
+            </Link>
+          </div>
         </section>
       </main>
 
@@ -417,18 +441,15 @@ function App() {
         <span>© 2026 Artisan Gallery. All rights reserved.</span>
       </footer>
 
-      {/* INQUIRY MODAL */}
       {inquiryArtwork && (
         <div className="dashboard-overlay" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <div className="booking-card" style={{ width: '100%', maxWidth: '500px', position: 'relative' }}>
             <button onClick={() => setInquiryArtwork(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             <h2 style={{ fontFamily: 'Playfair Display, serif', marginBottom: '10px' }}>Inquire about artwork</h2>
             <p style={{ color: '#777168', marginBottom: '20px', fontSize: '14px' }}>You are inquiring about <strong>{inquiryArtwork.title}</strong> by {inquiryArtwork.artist_name}.</p>
-
             {inquirySuccess && (
               <div className="booking-message success" style={{ marginBottom: '20px' }}><CheckCircle size={18} /> {inquirySuccess}</div>
             )}
-
             {!inquirySuccess && (
               <form onSubmit={handleSendInquiry}>
                 <div className="booking-field">
@@ -442,6 +463,15 @@ function App() {
             )}
           </div>
         </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <Lightbox 
+          artworks={filteredArtworks} 
+          index={lightboxIndex} 
+          onClose={() => setLightboxIndex(null)} 
+          onNavigate={setLightboxIndex} 
+        />
       )}
     </div>
   );

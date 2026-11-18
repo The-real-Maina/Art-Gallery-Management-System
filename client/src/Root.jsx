@@ -1,11 +1,21 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 
-import App from './App';
+// Main Pages
+import Home from './pages/Home'; 
 import Login from './pages/Login';
 import Register from './pages/Register';
 import VisitBooking from './pages/VisitBooking';
 import UserManagement from './pages/UserManagement';
-import ForgotPassword from './pages/ForgotPassword'; // <-- ADDED
+import ForgotPassword from './pages/ForgotPassword'; 
+import GalleryDetails from './pages/GalleryDetails'; 
+import ExhibitionDetail from './pages/ExhibitionDetail'; 
+
+// Public Solo Pages
+import ArtworksPage from './pages/ArtworksPage';
+import ExhibitionsPage from './pages/ExhibitionsPage';
+import ArtistsPage from './pages/ArtistsPage';
+import ContactPage from './pages/ContactPage';
 
 // Dashboards
 import Dashboard from './pages/Dashboard';
@@ -15,35 +25,35 @@ import CuratorDashboard from './pages/CuratorDashboard';
 import BookingOfficerDashboard from './pages/BookingOfficerDashboard';
 import TourGuideDashboard from './pages/TourGuideDashboard';
 
+function ScrollToHash() {
+  const { hash, pathname } = useLocation();
+  useEffect(() => {
+    if (!hash) { window.scrollTo(0, 0); return; }
+    const id = hash.replace('#', '');
+    const element = document.getElementById(id);
+    if (element) setTimeout(() => element.scrollIntoView({ behavior: 'smooth' }), 100); 
+  }, [hash, pathname]);
+  return null;
+}
+
 function DashboardRouter() {
   let user = null;
-  
   try {
     const stored = localStorage.getItem('art_gallery_user');
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Strict validation: Must have an ID and a Role to be considered logged in
-      if (parsed && parsed.user_id && parsed.role) {
-        user = parsed;
-      }
+      if (parsed && parsed.user_id && parsed.role) user = parsed;
     }
-  } catch {
-    // Invalid JSON, user remains null
-  }
+  } catch { /* Invalid JSON */ }
 
   if (!user) return <Navigate to="/login" replace />;
 
   switch (user.role) {
-    case 'Artist':
-      return <ArtistDashboard />;
-    case 'Administrator':
-      return <AdminDashboard />;
-    case 'Gallery Curator':
-      return <CuratorDashboard />;
-    case 'Booking Officer':
-      return <BookingOfficerDashboard />;
-    case 'Tour Guide':
-      return <TourGuideDashboard />;
+    case 'Artist': return <ArtistDashboard />;
+    case 'Administrator': return <AdminDashboard />;
+    case 'Gallery Curator': return <CuratorDashboard />;
+    case 'Booking Officer': return <BookingOfficerDashboard />;
+    case 'Tour Guide': return <TourGuideDashboard />;
     case 'Visitor':
     case 'Art Collector':
     default:
@@ -54,15 +64,25 @@ function DashboardRouter() {
 export default function Root() {
   return (
     <BrowserRouter>
+      <ScrollToHash />
       <Routes>
-        <Route path="/" element={<App />} />
+        {/* PUBLIC PAGES */}
+        <Route path="/" element={<Home />} />
+        <Route path="/artworks" element={<ArtworksPage />} />
+        <Route path="/exhibitions" element={<ExhibitionsPage />} />
+        <Route path="/artists" element={<ArtistsPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/gallery-details" element={<GalleryDetails />} />
+        <Route path="/exhibitions/:id" element={<ExhibitionDetail />} />
+        <Route path="/book-visit" element={<VisitBooking />} />
+
+        {/* AUTH */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} /> {/* <-- ADDED */}
-        <Route path="/book-visit" element={<VisitBooking />} />
-        
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+
+        {/* DASHBOARDS & ADMIN */}
         <Route path="/dashboard" element={<DashboardRouter />} />
-        
         <Route path="/admin/users" element={<UserManagement />} />
       </Routes>
     </BrowserRouter>
