@@ -6,11 +6,18 @@ import {
 
 import api from '../services/api';
 
+// Helper to render local uploaded images correctly
+const getImageUrl = (url) => {
+  if (!url) return 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5'; // Fallback
+  if (url.startsWith('http')) return url; // External link
+  return `http://localhost:5000${url}`; // Local upload
+};
+
 function ArtistDashboard() {
   const navigate = useNavigate();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, artworks, artwork-form, inquiries, profile
+  const [activeTab, setActiveTab] = useState('overview');
   
   const [artworks, setArtworks] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -24,6 +31,7 @@ function ArtistDashboard() {
   const [uploadData, setUploadData] = useState({
     title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: ''
   });
+  const [selectedFile, setSelectedFile] = useState(null);
   const [editingArtworkId, setEditingArtworkId] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
@@ -54,16 +62,8 @@ function ArtistDashboard() {
 
     const loadData = async () => {
       try {
-        const [artRes, inqRes] = await Promise.all([
-          api.get('/artworks/my-artworks'),
-          api.get('/collectors/artist/inquiries')
-        ]);
-        
-        if (!ignore) {
-          setArtworks(artRes.data.artworks || []);
-          setInquiries(inqRes.data.inquiries || []);
-        }
-
+        // Fetch Profile first to check if it exists
+        let hasProfile = false;
         try {
           const profRes = await api.get('/artists/my-profile');
           if (!ignore && profRes.data.profile) {
@@ -73,9 +73,32 @@ function ArtistDashboard() {
               specialization: profRes.data.profile.specialization || '',
               website: profRes.data.profile.website || ''
             });
+            hasProfile = true;
           }
         } catch (profErr) {
-          if (profErr.response?.status !== 404) console.error('Error fetching profile:', profErr);
+          if (profErr.response?.status === 404) {
+            // Profile doesn't exist yet, switch to profile tab
+            if (!ignore) {
+              setActiveTab('profile');
+              setProfileMessage('Please create your artist profile before uploading artworks.');
+            }
+          } else {
+            console.error('Error fetching profile:', profErr);
+          }
+        }
+
+        // Only fetch artworks and inquiries if profile exists
+        if (hasProfile) {
+          const [artRes, inqRes] = await Promise.all([
+            api.get('/artworks/my-artworks'),
+            api.get('/collectors/artist/inquiries')
+          ]);
+          
+          if (!ignore) {
+            setArtworks(artRes.data.artworks || []);
+            setInquiries(inqRes.data.inquiries || []);
+            setError(''); // clear any previous errors
+          }
         }
       } catch (err) {
         if (!ignore) setError(err.response?.data?.message || 'Unable to load dashboard data.');
@@ -100,6 +123,7 @@ function ArtistDashboard() {
       creation_year: art.creation_year || '', price: art.price || '',
       image_url: art.image_url || '', description: art.description || ''
     });
+    setSelectedFile(null); 
     setEditingArtworkId(art.artwork_id);
     setActiveTab('artwork-form');
   };
@@ -122,16 +146,35 @@ function ArtistDashboard() {
     setUploadLoading(true);
     setUploadMessage('');
 
+    const formData = new FormData();
+    formData.append('title', uploadData.title);
+    formData.append('category', uploadData.category);
+    formData.append('medium', uploadData.medium);
+    formData.append('creation_year', uploadData.creation_year);
+    formData.append('price', uploadData.price);
+    formData.append('description', uploadData.description);
+    
+    if (editingArtworkId && uploadData.image_url) {
+      formData.append('existing_image_url', uploadData.image_url);
+    }
+
+    if (selectedFile) {
+      formData.append('image_file', selectedFile);
+    }
+
     try {
+      const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
       if (editingArtworkId) {
-        await api.put(`/artworks/${editingArtworkId}`, uploadData);
+        await api.put(`/artworks/${editingArtworkId}`, formData, config);
         setUploadMessage('Artwork updated and resubmitted for approval!');
       } else {
-        await api.post('/artworks', uploadData);
+        await api.post('/artworks', formData, config);
         setUploadMessage('Artwork submitted successfully! It is pending review.');
       }
       
       setUploadData({ title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: '' });
+      setSelectedFile(null);
       setEditingArtworkId(null);
       setReloadKey(k => k + 1);
       
@@ -152,9 +195,16 @@ function ArtistDashboard() {
       if (profile) await api.put('/artists/my-profile', profileData);
       else await api.post('/artists', profileData);
       
-      setProfileMessage('Profile saved successfully!');
+      setProfileMessage('Profile saved successfully! You can now upload artworks.');
       setProfile(profileData);
-      setTimeout(() => setProfileMessage(''), 3000);
+      
+      // After saving profile, reload data to get artworks/inquiries
+      setReloadKey(k => k + 1);
+      
+      setTimeout(() => {
+        setProfileMessage('');
+        setActiveTab('overview'); // Move them to overview
+      }, 3000);
     } catch (err) {
       setProfileMessage(err.response?.data?.message || 'Failed to save profile.');
     } finally {
@@ -204,13 +254,13 @@ function ArtistDashboard() {
           <button className={activeTab === 'overview' ? 'active' : ''} onClick={() => { setActiveTab('overview'); setMenuOpen(false); }}>
             <LayoutDashboard size={19} /> Overview
           </button>
-          <button className={activeTab === 'artworks' ? 'active' : ''} onClick={() => { setActiveTab('artworks'); setMenuOpen(false); }}>
+          <button className={activeTab === 'artworks' ? 'active' : ''} onClick={() => { setActiveTab('artworks'); setMenuOpen(false); }} disabled={!profile}>
             <ImageIcon size={19} /> My Artworks
           </button>
-          <button className={activeTab === 'artwork-form' ? 'active' : ''} onClick={() => { setEditingArtworkId(null); setUploadData({ title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: '' }); setActiveTab('artwork-form'); setMenuOpen(false); }}>
+          <button className={activeTab === 'artwork-form' ? 'active' : ''} onClick={() => { setEditingArtworkId(null); setUploadData({ title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: '' }); setSelectedFile(null); setActiveTab('artwork-form'); setMenuOpen(false); }} disabled={!profile}>
             <PlusCircle size={19} /> Upload Artwork
           </button>
-          <button className={activeTab === 'inquiries' ? 'active' : ''} onClick={() => { setActiveTab('inquiries'); setMenuOpen(false); }}>
+          <button className={activeTab === 'inquiries' ? 'active' : ''} onClick={() => { setActiveTab('inquiries'); setMenuOpen(false); }} disabled={!profile}>
             <MessageCircle size={19} /> Inquiries
             {pendingInquiries > 0 && <span style={{ background: '#b24c48', color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', marginLeft: 'auto' }}>{pendingInquiries}</span>}
           </button>
@@ -247,6 +297,16 @@ function ArtistDashboard() {
                 <div><span className="eyebrow">ARTIST STUDIO</span><h1>Welcome, <em>{firstName}.</em></h1><p>Manage your portfolio, submit new artworks, and track their approval status.</p></div>
                 <div className="welcome-icon"><Palette size={38} /></div>
               </div>
+              
+              {!profile && (
+                <div className="dashboard-empty" style={{ marginBottom: '30px' }}>
+                  <UserRound size={40} style={{ color: '#a47745', marginBottom: '15px' }} />
+                  <h3>Complete your profile</h3>
+                  <p>You need to create an artist profile before you can upload artworks.</p>
+                  <button onClick={() => setActiveTab('profile')} className="primary-button">Create Profile Now</button>
+                </div>
+              )}
+
               <div className="dashboard-stats">
                 <div className="stat-card"><div className="stat-icon"><ImageIcon size={21} /></div><span>Total Uploads</span><strong>{artworks.length}</strong><small>Artworks in your portfolio</small></div>
                 <div className="stat-card"><div className="stat-icon"><CheckCircle size={21} /></div><span>Approved</span><strong>{artworks.filter(a => a.approval_status === 'Approved').length}</strong><small>Currently on display</small></div>
@@ -259,7 +319,7 @@ function ArtistDashboard() {
             <section className="dashboard-section">
               <div className="section-heading">
                 <div><span className="eyebrow">YOUR PORTFOLIO</span><h2>My Artworks</h2></div>
-                <button onClick={() => { setEditingArtworkId(null); setUploadData({ title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: '' }); setActiveTab('artwork-form'); }} className="primary-button header-book-btn"><PlusCircle size={16} /> Add New</button>
+                <button onClick={() => { setEditingArtworkId(null); setUploadData({ title: '', category: '', medium: '', creation_year: '', price: '', image_url: '', description: '' }); setSelectedFile(null); setActiveTab('artwork-form'); }} className="primary-button header-book-btn"><PlusCircle size={16} /> Add New</button>
               </div>
 
               {artworks.length === 0 ? (
@@ -270,7 +330,7 @@ function ArtistDashboard() {
                     const isEditable = ['Pending', 'Rejected'].includes(art.approval_status);
                     return (
                       <div className="profile-card" key={art.artwork_id} style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <img src={art.image_url} alt={art.title} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px' }} />
+                        <img src={getImageUrl(art.image_url)} alt={art.title} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px' }} />
                         <div className="profile-details" style={{ flex: 1 }}>
                           <h3>{art.title}</h3>
                           <p>{art.category} • KES {Number(art.price).toLocaleString()}</p>
@@ -330,9 +390,16 @@ function ArtistDashboard() {
                     <label>Price (KES)</label>
                     <input type="number" required min="0" value={uploadData.price} onChange={e => setUploadData({...uploadData, price: e.target.value})} />
                   </div>
+                  
                   <div className="booking-field">
-                    <label>Image URL</label>
-                    <input type="url" required placeholder="https://..." value={uploadData.image_url} onChange={e => setUploadData({...uploadData, image_url: e.target.value})} />
+                    <label>Upload Image {editingArtworkId && '(Leave empty to keep current)'}</label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      required={!editingArtworkId} 
+                      onChange={(e) => setSelectedFile(e.target.files[0])} 
+                      style={{ padding: '10px 0' }}
+                    />
                   </div>
                 </div>
 

@@ -1,11 +1,61 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Palette, LayoutDashboard, Users, MessageSquare, ShieldCheck, LogOut, Menu, X, ArrowRight, ArrowUpRight, AlertCircle, LoaderCircle, Trash2, MessageCircle, FileText, ChevronLeft, ChevronRight
+  Palette, LayoutDashboard, Users, MessageSquare, ShieldCheck, LogOut, Menu, X, ArrowUpRight,
+  AlertCircle, LoaderCircle, Trash2, MessageCircle, FileText, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 import api from '../services/api';
 import NotificationBell from '../components/NotificationBell';
+
+// Turns a raw audit action such as "PATCH /api/tours/bookings/1/status"
+// into a sentence an administrator can read at a glance.
+const ACTION_RULES = [
+  [/^POST \/api\/auth\/login/, 'Signed in'],
+  [/^POST \/api\/auth\/register/, 'Registered a new account'],
+
+  [/^POST \/api\/users\/?$/, 'Created a user account'],
+  [/^PUT \/api\/users\/\d+\/update/, 'Updated a user account'],
+  [/^(PUT|PATCH) \/api\/users\/\d+\/status/, 'Changed a user account status'],
+  [/^DELETE \/api\/users\/\d+/, 'Deleted a user account'],
+
+  [/^POST \/api\/tours\/\d+\/book/, 'Booked a guided tour'],
+  [/^PATCH \/api\/tours\/bookings\/\d+\/status/, 'Confirmed or declined a tour booking'],
+  [/^PATCH \/api\/tours\/bookings\/\d+\/cancel/, 'Cancelled a tour booking'],
+  [/^PATCH \/api\/tours\/\d+\/cancel/, 'Cancelled a guided tour'],
+  [/^PATCH \/api\/tours\/\d+\/complete/, 'Completed a guided tour'],
+  [/^POST \/api\/tours\/?$/, 'Scheduled a guided tour'],
+  [/^PUT \/api\/tours\/\d+/, 'Updated a guided tour'],
+
+  [/^POST \/api\/visit-bookings\/?$/, 'Booked a gallery visit'],
+  [/^PATCH \/api\/visit-bookings\/\d+\/cancel/, 'Cancelled a gallery visit'],
+  [/^PATCH \/api\/visit-bookings\/\d+/, 'Updated a gallery visit booking'],
+
+  [/^POST \/api\/artworks\/?$/, 'Added an artwork'],
+  [/^(PUT|PATCH) \/api\/artworks\/\d+/, 'Updated an artwork'],
+  [/^DELETE \/api\/artworks\/\d+/, 'Deleted an artwork'],
+
+  [/^POST \/api\/exhibitions\/?$/, 'Created an exhibition'],
+  [/^(PUT|PATCH) \/api\/exhibitions\/\d+/, 'Updated an exhibition'],
+
+  [/^POST \/api\/feedback/, 'Submitted feedback'],
+  [/^DELETE \/api\/feedback\/\d+/, 'Deleted feedback'],
+
+  [/^POST \/api\/collectors\/inquiries/, 'Sent a purchase inquiry'],
+  [/^(PUT|PATCH) \/api\/collectors\/inquiries/, 'Responded to a purchase inquiry'],
+  [/^POST \/api\/collectors\/favourites/, 'Saved an artwork to favourites'],
+  [/^DELETE \/api\/collectors\/favourites/, 'Removed a favourite artwork'],
+];
+
+const describeAction = (action = '') => {
+  const rule = ACTION_RULES.find(([pattern]) => pattern.test(action));
+  if (rule) return rule[1];
+
+  const [method = '', path = ''] = action.split(' ');
+  const verb = { POST: 'Created', PUT: 'Updated', PATCH: 'Updated', DELETE: 'Deleted' }[method] || method;
+  const resource = path.replace(/^\/api\//, '').split('/')[0].replace(/-/g, ' ');
+  return resource ? `${verb} ${resource}` : action;
+};
 
 function AdminDashboard() {
   const navigate = useNavigate();
@@ -16,7 +66,7 @@ function AdminDashboard() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [userCount, setUserCount] = useState(0);
-  
+
   // Audit Log State
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditPage, setAuditPage] = useState(1);
@@ -69,7 +119,7 @@ function AdminDashboard() {
 
       if (failed.length > 0) setError(`Could not load: ${failed.join(', ')}.`);
       else setError('');
-      
+
       setLoading(false);
     };
 
@@ -127,13 +177,18 @@ function AdminDashboard() {
     });
   };
 
+  const formatIp = (ip) => {
+    if (!ip) return 'Unknown';
+    return ['::1', '127.0.0.1', '::ffff:127.0.0.1'].includes(ip) ? 'This computer' : ip;
+  };
+
   const goToTab = (tab) => {
     setActiveTab(tab);
     setMenuOpen(false);
   };
 
   const modules = [
-    { title: 'User Management', description: 'Manage gallery members, staff and access roles.', icon: Users, path: '/admin/users' },
+    { title: 'User Management', description: 'Add staff, manage members and access roles.', icon: Users, path: '/admin/users' },
     { title: 'Feedback Moderation', description: 'Review and remove visitor feedback.', icon: MessageSquare, tab: 'feedback' },
     { title: 'Purchase Inquiries', description: 'Oversee collector inquiries to artists.', icon: MessageCircle, tab: 'inquiries' },
     { title: 'Audit Logs', description: 'Track system activity and security events.', icon: FileText, tab: 'audit' },
@@ -198,15 +253,14 @@ function AdminDashboard() {
 
           <div className="dashboard-header-actions">
             <NotificationBell />
-            <Link to="/" className="dashboard-home-link">Explore gallery <ArrowRight size={16} /></Link>
           </div>
         </header>
 
         <section className="dashboard-content">
           {error && <div className="dashboard-error"><AlertCircle size={18} /> {error}</div>}
-          
+
           {loading && (
-            <div className="dashboard-loading"><LoaderCircle size={24} /><span>Loading system data...</span></div>
+            <div className="dashboard-loading"><LoaderCircle size={24} className="loading-spinner" /><span>Loading system data...</span></div>
           )}
 
           {/* OVERVIEW TAB */}
@@ -215,8 +269,8 @@ function AdminDashboard() {
               <div className="dashboard-welcome admin-welcome">
                 <div>
                   <span className="eyebrow">ADMINISTRATOR WORKSPACE</span>
-                  <h1>Welcome, <em>{firstName}.</em></h1>
-                  <p>Monitor system activity, moderate content and manage the gallery from one central workspace.</p>
+                  <h1>Welcome, <em>{user.full_name}.</em></h1>
+                  <p>Monitor system activity, moderate content and manage gallery staff and accounts from one central workspace.</p>
                 </div>
                 <div className="welcome-icon"><ShieldCheck size={38} /></div>
               </div>
@@ -323,7 +377,7 @@ function AdminDashboard() {
                         <p style={{ fontSize: '13px', color: '#a47745', fontWeight: 'bold' }}>
                           From: {inq.collector_name} • To Artist: {inq.artist_name}
                         </p>
-                        
+
                         <div style={{ background: '#faf9f6', padding: '15px', borderRadius: '6px', margin: '15px 0', borderLeft: '3px solid #ccc' }}>
                           <p style={{ margin: 0, fontStyle: 'italic', color: '#555' }}>"{inq.message}"</p>
                         </div>
@@ -350,21 +404,23 @@ function AdminDashboard() {
               </div>
 
               {auditLoading ? (
-                <div className="dashboard-loading"><LoaderCircle size={24} className="animate-spin" /><span>Loading logs...</span></div>
+                <div className="dashboard-loading"><LoaderCircle size={24} className="loading-spinner" /><span>Loading logs...</span></div>
               ) : auditLogs.length === 0 ? (
                 <div className="dashboard-empty"><FileText size={30} /><h3>No logs available</h3></div>
               ) : (
                 <>
                   <div className="dashboard-bookings-list">
                     {auditLogs.map((log) => (
-                      <div className="profile-card" key={log.log_id} style={{ padding: '15px 25px' }}>
-                        <div className="profile-details">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <strong style={{ fontSize: '14px', color: '#25231f' }}>{log.action}</strong>
-                            <span style={{ fontSize: '11px', color: '#999' }}>{formatDate(log.created_at)}</span>
+                      <div className="profile-card" key={log.log_id} style={{ padding: '16px 25px' }}>
+                        <div className="profile-details" style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '6px 20px' }}>
+                            <strong style={{ fontSize: '14px', color: '#25231f' }}>
+                              {log.full_name || 'System'} <span style={{ fontWeight: 500, color: '#68645d' }}>· {describeAction(log.action)}</span>
+                            </strong>
+                            <span style={{ fontSize: '11px', color: '#999', whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</span>
                           </div>
-                          <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#777168' }}>
-                            User: <strong>{log.full_name || 'System'}</strong> • IP: {log.ip_address || 'Unknown'}
+                          <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#98917f' }}>
+                            <code style={{ fontFamily: 'ui-monospace, Consolas, monospace' }}>{log.action}</code> · {formatIp(log.ip_address)}
                           </p>
                         </div>
                       </div>
@@ -373,16 +429,16 @@ function AdminDashboard() {
 
                   {/* PAGINATION CONTROLS */}
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '20px' }}>
-                    <button 
-                      onClick={() => setAuditPage(p => Math.max(1, p - 1))} 
+                    <button
+                      onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
                       disabled={auditPage === 1}
                       className="primary-button" style={{ padding: '8px 12px', background: '#292721', opacity: auditPage === 1 ? 0.5 : 1 }}
                     >
                       <ChevronLeft size={16} /> Previous
                     </button>
                     <span style={{ fontSize: '13px', fontWeight: 'bold' }}>Page {auditPage} of {auditTotalPages}</span>
-                    <button 
-                      onClick={() => setAuditPage(p => Math.min(auditTotalPages, p + 1))} 
+                    <button
+                      onClick={() => setAuditPage((p) => Math.min(auditTotalPages, p + 1))}
                       disabled={auditPage === auditTotalPages}
                       className="primary-button" style={{ padding: '8px 12px', background: '#292721', opacity: auditPage === auditTotalPages ? 0.5 : 1 }}
                     >

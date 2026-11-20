@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 
@@ -11,6 +10,9 @@ const {
   getMyTours,
   updateTour,
   cancelTour,
+  completeTour,
+  getTourBookings,
+  updateTourBookingStatus,
   bookTour,
   getMyTourBookings,
   cancelMyTourBooking
@@ -22,43 +24,29 @@ router.get('/public', getPublicTours);
 // All remaining routes require authentication
 router.use(protect);
 
-// Tour Guide operations
-router.post(
-  '/',
-  authorize('Tour Guide'),
-  createTour
-);
+// ---------- Tour Guide ----------
+router.post('/', authorize('Tour Guide'), createTour);
 
-router.get(
-  '/my-tours',
-  authorize('Tour Guide'),
-  getMyTours
-);
+router.get('/my-tours', authorize('Tour Guide'), getMyTours);
 
-router.put(
-  '/:id',
-  authorize('Tour Guide'),
-  updateTour
-);
+router.get('/:id/bookings', authorize('Tour Guide'), getTourBookings);
+
+router.put('/:id', authorize('Tour Guide'), updateTour);
+
+router.patch('/:id/cancel', authorize('Tour Guide'), cancelTour);
+
+router.patch('/:id/complete', authorize('Tour Guide'), completeTour);
 
 router.patch(
-  '/:id/cancel',
+  '/bookings/:bookingId/status',
   authorize('Tour Guide'),
-  cancelTour
+  updateTourBookingStatus
 );
 
-// Visitor operations
-router.post(
-  '/:id/book',
-  authorize('Visitor'),
-  bookTour
-);
+// ---------- Visitor ----------
+router.post('/:id/book', authorize('Visitor'), bookTour);
 
-router.get(
-  '/my-bookings',
-  authorize('Visitor'),
-  getMyTourBookings
-);
+router.get('/my-bookings', authorize('Visitor'), getMyTourBookings);
 
 router.patch(
   '/bookings/:bookingId/cancel',

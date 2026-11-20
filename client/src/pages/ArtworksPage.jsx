@@ -4,6 +4,14 @@ import api from '../services/api';
 import PublicNavbar from '../components/PublicNavbar';
 import Lightbox from '../components/Lightbox';
 
+// --- HELPER FUNCTION TO FIX THE IMAGE URL ---
+const getImageUrl = (url) => {
+  if (!url) return 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5'; 
+  if (url.startsWith('http')) return url; 
+  return `http://localhost:5000${url}`; // Adds the backend URL for uploaded images
+};
+// --------------------------------------------
+
 function ArtworksPage() {
   const [user] = useState(() => {
     try { return JSON.parse(localStorage.getItem('art_gallery_user') || 'null'); } catch { return null; }
@@ -12,7 +20,7 @@ function ArtworksPage() {
   const [artworks, setArtworks] = useState([]);
   const [favourites, setFavourites] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [activeCategory, setActiveCategory] = useState('All');
   const [artistFilter, setArtistFilter] = useState('All');
   const [search, setSearch] = useState('');
@@ -54,7 +62,7 @@ function ArtworksPage() {
     try {
       if (existingFav) await api.delete(`/collectors/favourites/${existingFav.favourite_id}`);
       else await api.post('/collectors/favourites', { artwork_id: artworkId });
-      
+
       const response = await api.get('/collectors/favourites');
       setFavourites(response.data.favourites || []);
     } catch (error) {
@@ -103,7 +111,7 @@ function ArtworksPage() {
           <div className="category-tabs">
             {categories.map((c) => <button key={c} className={activeCategory === c ? 'category-tab active' : 'category-tab'} onClick={() => setActiveCategory(c)}>{c}</button>)}
           </div>
-          
+
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <div className="search-box" style={{ padding: '0 10px' }}>
               <Filter size={17} style={{ color: '#a47745' }} />
@@ -129,7 +137,8 @@ function ArtworksPage() {
               return (
                 <article className="artwork-card" key={artwork.artwork_id} onClick={() => setLightboxIndex(index)} style={{ cursor: 'pointer' }}>
                   <div className="artwork-image">
-                    <img src={artwork.image_url} alt={artwork.title} loading="lazy" />
+                    {/* FIXED IMAGE TAG HERE */}
+                    <img src={getImageUrl(artwork.image_url)} alt={artwork.title} loading="lazy" />
                     <button className={`favorite-button ${isFav ? 'selected' : ''}`} onClick={(e) => handleToggleFavourite(e, artwork.artwork_id)}>
                       <Heart size={18} fill={isFav ? "currentColor" : "none"} />
                     </button>

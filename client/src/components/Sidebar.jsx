@@ -1,10 +1,44 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Palette, LayoutDashboard, Heart, CalendarDays, UserRound, LogOut, 
+import {
+  Palette, LayoutDashboard, Heart, CalendarDays, UserRound, LogOut,
   Compass, MapPin, Star, MessageCircle, Users, MessageSquare, FileText, PlusCircle,
-  Image as ImageIcon, Mail, LogIn
+  Image as ImageIcon, Mail, LogIn, ChevronRight
 } from 'lucide-react';
+
+/* ------------------------------------------------------------------
+   Nav item components live OUTSIDE Sidebar so React doesn't recreate
+   them on every render (fixes react-hooks/static-components).
+   ------------------------------------------------------------------ */
+
+// Workspace tab button (stays on /dashboard, switches tab)
+function NavTab({ icon: Icon, label, title, active, collapsed, onSelect }) {
+  return (
+    <button
+      className={`nav-item ${active ? 'active' : ''}`}
+      onClick={onSelect}
+      title={title || label}
+    >
+      <Icon size={19} /> {!collapsed && <span>{label}</span>}
+      {!collapsed && <ChevronRight size={16} className="hover-arrow" />}
+    </button>
+  );
+}
+
+// Route link (Messages, Manage Users, Discover pages)
+function NavRoute({ to, icon: Icon, label, title, active, collapsed, onNavigate }) {
+  return (
+    <Link
+      to={to}
+      onClick={onNavigate}
+      className={`nav-item ${active ? 'active' : ''}`}
+      title={title || label}
+    >
+      <Icon size={19} /> {!collapsed && <span>{label}</span>}
+      {!collapsed && <ChevronRight size={16} className="hover-arrow" />}
+    </Link>
+  );
+}
 
 export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMenuOpen, onLogout }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -19,27 +53,41 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
   const isBooking = user?.role === 'Booking Officer';
   const isGuide = user?.role === 'Tour Guide';
 
+  const onDashboard = location.pathname === '/dashboard';
+
   // Route to /dashboard if clicking a workspace tab from a public page
   const handleTabChange = (tab) => {
     if (setActiveTab) setActiveTab(tab);
     if (setMenuOpen) setMenuOpen(false);
-    if (location.pathname !== '/dashboard') {
-      navigate('/dashboard');
-    }
+    if (!onDashboard) navigate('/dashboard');
   };
 
   const closeMenu = () => {
     if (setMenuOpen) setMenuOpen(false);
   };
 
+  // Helpers that return the shared props, so JSX below stays short
+  const tabProps = (id) => ({
+    active: activeTab === id && onDashboard,
+    collapsed: isCollapsed,
+    onSelect: () => handleTabChange(id),
+  });
+
+  const routeProps = (to) => ({
+    to,
+    active: location.pathname === to,
+    collapsed: isCollapsed,
+    onNavigate: closeMenu,
+  });
+
   return (
     <aside className={`dashboard-sidebar ${menuOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
-      
+
       {/* HEADER: Logo toggles the sidebar */}
-      <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
-        <div 
-          onClick={() => setIsCollapsed(!isCollapsed)} 
-          className="brand dashboard-brand" 
+      <div className="sidebar-header" style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
+        <div
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="brand dashboard-brand"
           style={{ cursor: 'pointer', padding: 0, margin: 0 }}
           title="Toggle Sidebar"
         >
@@ -48,147 +96,91 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
         </div>
       </div>
 
-      {/* WORKSPACE TABS */}
-      {user && (
-        <>
-          <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block' }}>WORKSPACE</div>
-          <nav className="dashboard-nav">
-            
-            {/* VISITOR / COLLECTOR */}
-            {(isVisitor || isCollector) && (
-              <>
-                <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
-                  <LayoutDashboard size={19} /> {!isCollapsed && <span>Overview</span>}
-                </button>
-                <button className={activeTab === 'exhibitions' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('exhibitions')} title="Exhibitions">
-                  <Compass size={19} /> {!isCollapsed && <span>Exhibitions</span>}
-                </button>
-                {isVisitor && (
-                  <button className={activeTab === 'guided-tours' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('guided-tours')} title="Guided Tours">
-                    <MapPin size={19} /> {!isCollapsed && <span>Guided Tours</span>}
-                  </button>
-                )}
-                {isVisitor && (
-                  <button className={activeTab === 'my-feedback' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('my-feedback')} title="My Feedback">
-                    <Star size={19} /> {!isCollapsed && <span>My Feedback</span>}
-                  </button>
-                )}
-                {isCollector && (
-                  <button className={activeTab === 'favourites' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('favourites')} title="My favourites">
-                    <Heart size={19} /> {!isCollapsed && <span>My favourites</span>}
-                  </button>
-                )}
-                {isCollector && (
-                  <button className={activeTab === 'inquiries' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('inquiries')} title="My inquiries">
-                    <MessageCircle size={19} /> {!isCollapsed && <span>My inquiries</span>}
-                  </button>
-                )}
-                {isVisitor && (
-                  <button className={activeTab === 'visits' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('visits')} title="My visits">
-                    <CalendarDays size={19} /> {!isCollapsed && <span>My visits</span>}
-                  </button>
-                )}
-                <button className={activeTab === 'profile' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('profile')} title="My profile">
-                  <UserRound size={19} /> {!isCollapsed && <span>My profile</span>}
-                </button>
-              </>
-            )}
+      {/* SCROLLABLE MIDDLE: header and user block stay pinned */}
+      <div className="sidebar-scroll">
 
-            {/* ADMINISTRATOR */}
-            {isAdmin && (
-              <>
-                <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
-                  <LayoutDashboard size={19} /> {!isCollapsed && <span>Overview</span>}
-                </button>
-                <button className={activeTab === 'feedback' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('feedback')} title="Feedback">
-                  <MessageSquare size={19} /> {!isCollapsed && <span>Feedback</span>}
-                </button>
-                <button className={activeTab === 'inquiries' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('inquiries')} title="Inquiries">
-                  <MessageCircle size={19} /> {!isCollapsed && <span>Inquiries</span>}
-                </button>
-                <button className={activeTab === 'audit' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('audit')} title="Audit Logs">
-                  <FileText size={19} /> {!isCollapsed && <span>Audit Logs</span>}
-                </button>
-                
-                <div style={{ height: '1px', background: '#3a3831', margin: '10px 0' }} />
-                
-                <Link to="/admin/users" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/admin/users' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/admin/users' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Manage Users">
-                  <Users size={19} /> {!isCollapsed && <span>Manage Users</span>}
-                </Link>
-              </>
-            )}
+        {/* WORKSPACE TABS */}
+        {user && (
+          <>
+            <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block' }}>WORKSPACE</div>
+            <nav className="dashboard-nav">
 
-            {/* CURATOR */}
-            {isCurator && (
-              <>
-                <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
-                  <LayoutDashboard size={19} /> {!isCollapsed && <span>Overview</span>}
-                </button>
-                <button className={activeTab === 'review' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('review')} title="Review Artworks">
-                  <Star size={19} /> {!isCollapsed && <span>Review Artworks</span>}
-                </button>
-                <button className={activeTab === 'exhibitions' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('exhibitions')} title="Manage Exhibitions">
-                  <Compass size={19} /> {!isCollapsed && <span>Exhibitions</span>}
-                </button>
-              </>
-            )}
+              {/* VISITOR / COLLECTOR */}
+              {(isVisitor || isCollector) && (
+                <>
+                  <NavTab icon={LayoutDashboard} label="Overview" {...tabProps('overview')} />
+                  <NavRoute icon={MessageSquare} label="Messages" {...routeProps('/messages')} />
+                  <NavTab icon={Compass} label="Exhibitions" {...tabProps('exhibitions')} />
+                  {isVisitor && <NavTab icon={MapPin} label="Guided Tours" {...tabProps('guided-tours')} />}
+                  {isVisitor && <NavTab icon={Star} label="My Feedback" {...tabProps('my-feedback')} />}
+                  {isCollector && <NavTab icon={Heart} label="My favourites" {...tabProps('favourites')} />}
+                  {isCollector && <NavTab icon={MessageCircle} label="My inquiries" {...tabProps('inquiries')} />}
+                  {isVisitor && <NavTab icon={CalendarDays} label="My visits" {...tabProps('visits')} />}
+                  <NavTab icon={UserRound} label="My profile" {...tabProps('profile')} />
+                </>
+              )}
 
-            {/* BOOKING OFFICER */}
-            {isBooking && (
-              <>
-                <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
-                  <LayoutDashboard size={19} /> {!isCollapsed && <span>Overview</span>}
-                </button>
-                <button className={activeTab === 'bookings' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('bookings')} title="Manage Bookings">
-                  <CalendarDays size={19} /> {!isCollapsed && <span>Manage Bookings</span>}
-                </button>
-              </>
-            )}
+              {/* ADMINISTRATOR */}
+              {isAdmin && (
+                <>
+                  <NavTab icon={LayoutDashboard} label="Overview" {...tabProps('overview')} />
+                  <NavTab icon={MessageSquare} label="Feedback" {...tabProps('feedback')} />
+                  <NavTab icon={MessageCircle} label="Inquiries" {...tabProps('inquiries')} />
+                  <NavTab icon={FileText} label="Audit Logs" {...tabProps('audit')} />
 
-            {/* TOUR GUIDE */}
-            {isGuide && (
-              <>
-                <button className={activeTab === 'overview' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('overview')} title="Overview">
-                  <LayoutDashboard size={19} /> {!isCollapsed && <span>Overview</span>}
-                </button>
-                <button className={activeTab === 'my-tours' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('my-tours')} title="My Tours">
-                  <MapPin size={19} /> {!isCollapsed && <span>My Tours</span>}
-                </button>
-                <button className={activeTab === 'tour-form' && location.pathname === '/dashboard' ? 'active' : ''} onClick={() => handleTabChange('tour-form')} title="Schedule Tour">
-                  <PlusCircle size={19} /> {!isCollapsed && <span>Schedule Tour</span>}
-                </button>
-              </>
-            )}
-          </nav>
-        </>
-      )}
+                  <div className="sidebar-divider" />
 
-      {/* DISCOVER GALLERY (ONLY FOR VISITORS & COLLECTORS) */}
-      {(isVisitor || isCollector) && (
-        <>
-          <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block', marginTop: '25px' }}>DISCOVER GALLERY</div>
-          <nav className="dashboard-nav">
-            <Link to="/artworks" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artworks' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artworks' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="All Artworks">
-              <ImageIcon size={19} /> {!isCollapsed && <span>All Artworks</span>}
-            </Link>
-            <Link to="/exhibitions" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/exhibitions' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/exhibitions' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Exhibitions">
-              <Compass size={19} /> {!isCollapsed && <span>Exhibitions</span>}
-            </Link>
-            <Link to="/artists" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/artists' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/artists' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Meet the Artists">
-              <Users size={19} /> {!isCollapsed && <span>Meet the Artists</span>}
-            </Link>
-            <Link to="/contact" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/contact' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/contact' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="Contact & Inquiries">
-              <Mail size={19} /> {!isCollapsed && <span>Contact & Inquiries</span>}
-            </Link>
-            <Link to="/gallery-details" onClick={closeMenu} style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '13px 14px', color: location.pathname === '/gallery-details' ? '#d6b879' : '#bcb9b0', fontSize: '13px', textDecoration: 'none', justifyContent: isCollapsed ? 'center' : 'flex-start', background: location.pathname === '/gallery-details' ? '#34322d' : 'transparent', borderRadius: '7px' }} title="The Gallery">
-              <Palette size={19} /> {!isCollapsed && <span>The Gallery</span>}
-            </Link>
-          </nav>
-        </>
-      )}
+                  <NavRoute icon={Users} label="Manage Users" {...routeProps('/admin/users')} />
+                </>
+              )}
 
-      {/* BOTTOM SECTION: User Info OR Login */}
-      <div className="sidebar-bottom" style={{ padding: isCollapsed ? '20px 10px' : '20px' }}>
+              {/* CURATOR */}
+              {isCurator && (
+                <>
+                  <NavTab icon={LayoutDashboard} label="Overview" {...tabProps('overview')} />
+                  <NavTab icon={Star} label="Review Artworks" {...tabProps('review')} />
+                  <NavTab icon={Compass} label="Exhibitions" title="Manage Exhibitions" {...tabProps('exhibitions')} />
+                </>
+              )}
+
+              {/* BOOKING OFFICER */}
+              {isBooking && (
+                <>
+                  <NavTab icon={LayoutDashboard} label="Overview" {...tabProps('overview')} />
+                  <NavTab icon={CalendarDays} label="Manage Bookings" {...tabProps('bookings')} />
+                </>
+              )}
+
+              {/* TOUR GUIDE */}
+              {isGuide && (
+                <>
+                  <NavTab icon={LayoutDashboard} label="Overview" {...tabProps('overview')} />
+                  <NavTab icon={MapPin} label="My Tours" {...tabProps('my-tours')} />
+                  <NavTab icon={PlusCircle} label="Schedule Tour" {...tabProps('tour-form')} />
+                </>
+              )}
+            </nav>
+          </>
+        )}
+
+        {/* DISCOVER GALLERY (ONLY FOR VISITORS & COLLECTORS) */}
+        {(isVisitor || isCollector) && (
+          <>
+            <div className="sidebar-divider" />
+            <div className="sidebar-label" style={{ display: isCollapsed ? 'none' : 'block' }}>DISCOVER GALLERY</div>
+            <nav className="dashboard-nav">
+              <NavRoute icon={ImageIcon} label="All Artworks" {...routeProps('/artworks')} />
+              <NavRoute icon={Compass} label="Browse Exhibitions" {...routeProps('/exhibitions')} />
+              <NavRoute icon={Users} label="Meet the Artists" {...routeProps('/artists')} />
+              <NavRoute icon={Mail} label="Contact" title="Contact & Inquiries" {...routeProps('/contact')} />
+              <NavRoute icon={Palette} label="The Gallery" {...routeProps('/gallery-details')} />
+            </nav>
+          </>
+        )}
+      </div>
+
+      {/* BOTTOM SECTION: User Info OR Login (pinned) */}
+      <div className="sidebar-bottom" style={{ padding: isCollapsed ? '12px 10px' : '12px 14px' }}>
         {user ? (
           <>
             <div className="sidebar-user" style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
@@ -197,12 +189,21 @@ export default function Sidebar({ user, activeTab, setActiveTab, menuOpen, setMe
                 <div><strong>{user.full_name}</strong><span>{user.role}</span></div>
               )}
             </div>
-            <button className="logout-button" onClick={onLogout} title="Sign out" style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '10px' : '12px' }}>
+            <button
+              className="logout-button"
+              onClick={onLogout}
+              title="Sign out"
+              style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '10px' : '10px 8px' }}
+            >
               <LogOut size={18} /> {!isCollapsed && <span>Sign out</span>}
             </button>
           </>
         ) : (
-          <Link to="/login" className="primary-button" style={{ width: '100%', display: 'flex', justifyContent: 'center', padding: isCollapsed ? '12px' : '15px', fontSize: '13px' }}>
+          <Link
+            to="/login"
+            className="primary-button"
+            style={{ width: '100%', display: 'flex', justifyContent: 'center', padding: isCollapsed ? '12px' : '15px', fontSize: '13px' }}
+          >
             <LogIn size={18} /> {!isCollapsed && <span style={{ marginLeft: '8px' }}>Sign In</span>}
           </Link>
         )}

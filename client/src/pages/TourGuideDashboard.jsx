@@ -1,17 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Palette, LayoutDashboard, MapPin, CalendarDays, Clock, Users, LogOut, Menu, X, ArrowRight, AlertCircle, LoaderCircle, PlusCircle, Edit, Ban
+  Palette, LayoutDashboard, MapPin, CalendarDays, Clock, Users, LogOut, Menu, X, ArrowRight,
+  AlertCircle, LoaderCircle, PlusCircle, Edit, Ban, CheckCircle, ClipboardList
 } from 'lucide-react';
 
 import api from '../services/api';
+
+const EMPTY_TOUR = {
+  title: '', description: '', exhibition_id: '', tour_date: '', start_time: '',
+  duration_minutes: '60', max_participants: '20'
+};
+
+const todayString = () => {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+};
 
 function TourGuideDashboard() {
   const navigate = useNavigate();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview'); // overview, my-tours, tour-form
-  
+
   const [tours, setTours] = useState([]);
   const [exhibitions, setExhibitions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,19 +32,25 @@ function TourGuideDashboard() {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Bookings panel (per tour)
+  const [expandedTourId, setExpandedTourId] = useState(null);
+  const [bookingsByTour, setBookingsByTour] = useState({});
+  const [bookingsLoadingId, setBookingsLoadingId] = useState(null);
+  const [bookingActionId, setBookingActionId] = useState(null);
+
   // Form state
-  const [tourData, setTourData] = useState({
-    title: '', description: '', exhibition_id: '', tour_date: '', start_time: '', duration_minutes: '60', max_participants: '20'
-  });
+  const [tourData, setTourData] = useState(EMPTY_TOUR);
   const [editingTourId, setEditingTourId] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formMessage, setFormMessage] = useState('');
+  const [formSuccess, setFormSuccess] = useState(false);
 
   const [user] = useState(() => {
     try { return JSON.parse(localStorage.getItem('art_gallery_user') || 'null'); } catch { return null; }
   });
 
   const firstName = user?.full_name?.split(' ')[0] || 'Guide';
+  const today = todayString();
 
   useEffect(() => {
     if (!user || user.role !== 'Tour Guide') navigate('/login', { replace: true });
@@ -47,7 +66,7 @@ function TourGuideDashboard() {
           api.get('/tours/my-tours'),
           api.get('/exhibitions/public')
         ]);
-        
+
         if (!ignore) {
           setTours(toursRes.data.tours || []);
           setExhibitions(exRes.data.exhibitions || []);
@@ -64,10 +83,29 @@ function TourGuideDashboard() {
     return () => { ignore = true; };
   }, [user, reloadKey]);
 
+  // Close the form tab after a successful save (timer is cleaned up on unmount)
+  useEffect(() => {
+    if (!formSuccess) return undefined;
+    const timer = setTimeout(() => {
+      setActiveTab('my-tours');
+      setFormMessage('');
+      setFormSuccess(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [formSuccess]);
+
   const handleLogout = () => {
     localStorage.removeItem('art_gallery_token');
     localStorage.removeItem('art_gallery_user');
     navigate('/login', { replace: true });
+  };
+
+  const openNewTourForm = () => {
+    setEditingTourId(null);
+    setTourData(EMPTY_TOUR);
+    setFormMessage('');
+    setActiveTab('tour-form');
+    setMenuOpen(false);
   };
 
   const handleEditClick = (tour) => {
@@ -81,15 +119,17 @@ function TourGuideDashboard() {
       max_participants: tour.max_participants
     });
     setEditingTourId(tour.tour_id);
+    setFormMessage('');
     setActiveTab('tour-form');
   };
 
   const handleCancelTour = async (tourId) => {
-    if (!window.confirm('Are you sure you want to cancel this tour? All current bookings will be cancelled.')) return;
+    if (!window.confirm('Are you sure you want to cancel this tour? All current bookings will be cancelled and visitors will be notified.')) return;
     try {
       setActionLoadingId(tourId);
       await api.patch(`/tours/${tourId}/cancel`);
-      setReloadKey(k => k + 1); // Refresh list
+      setExpandedTourId(null);
+      setReloadKey((k) => k + 1);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to cancel tour.');
     } finally {
@@ -97,10 +137,60 @@ function TourGuideDashboard() {
     }
   };
 
+  const handleCompleteTour = async (tourId) => {
+    if (!window.confirm('Mark this tour as completed? Confirmed bookings become completed and pending ones are closed.')) return;
+    try {
+      setActionLoadingId(tourId);
+      await api.patch(`/tours/${tourId}/complete`);
+      setExpandedTourId(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to complete tour.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const loadBookings = async (tourId) => {
+    try {
+      setBookingsLoadingId(tourId);
+      const res = await api.get(`/tours/${tourId}/bookings`);
+      setBookingsByTour((prev) => ({ ...prev, [tourId]: res.data.bookings || [] }));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to load bookings.');
+    } finally {
+      setBookingsLoadingId(null);
+    }
+  };
+
+  const toggleBookings = (tourId) => {
+    if (expandedTourId === tourId) {
+      setExpandedTourId(null);
+      return;
+    }
+    setExpandedTourId(tourId);
+    loadBookings(tourId);
+  };
+
+  const handleBookingStatus = async (tour, booking, status) => {
+    if (status === 'Cancelled' && !window.confirm('Decline this booking? The visitor will be notified.')) return;
+    try {
+      setBookingActionId(booking.tour_booking_id);
+      await api.patch(`/tours/bookings/${booking.tour_booking_id}/status`, { status });
+      await loadBookings(tour.tour_id);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update booking.');
+    } finally {
+      setBookingActionId(null);
+    }
+  };
+
   const handleSubmitTour = async (e) => {
     e.preventDefault();
     setFormLoading(true);
     setFormMessage('');
+    setFormSuccess(false);
 
     try {
       const formattedStartTime = tourData.start_time.length === 5 ? `${tourData.start_time}:00` : tourData.start_time;
@@ -119,12 +209,11 @@ function TourGuideDashboard() {
         await api.post('/tours', payload);
         setFormMessage('Tour scheduled successfully!');
       }
-      
-      setTourData({ title: '', description: '', exhibition_id: '', tour_date: '', start_time: '', duration_minutes: '60', max_participants: '20' });
+
+      setTourData(EMPTY_TOUR);
       setEditingTourId(null);
-      setReloadKey(k => k + 1);
-      
-      setTimeout(() => { setActiveTab('my-tours'); setFormMessage(''); }, 1500);
+      setFormSuccess(true);
+      setReloadKey((k) => k + 1);
     } catch (err) {
       setFormMessage(err.response?.data?.message || 'Failed to save tour.');
     } finally {
@@ -146,6 +235,10 @@ function TourGuideDashboard() {
 
   if (!user) return null;
 
+  const scheduledTours = tours.filter((t) => t.status === 'Scheduled');
+  const seatsBooked = scheduledTours.reduce((sum, t) => sum + Number(t.booked_seats || 0), 0);
+  const pendingRequests = scheduledTours.reduce((sum, t) => sum + Number(t.pending_bookings || 0), 0);
+
   return (
     <div className="dashboard-page">
       <aside className={`dashboard-sidebar ${menuOpen ? 'open' : ''}`}>
@@ -163,7 +256,7 @@ function TourGuideDashboard() {
           <button className={activeTab === 'my-tours' ? 'active' : ''} onClick={() => { setActiveTab('my-tours'); setMenuOpen(false); }}>
             <MapPin size={19} /> My Tours
           </button>
-          <button className={activeTab === 'tour-form' ? 'active' : ''} onClick={() => { setEditingTourId(null); setTourData({ title: '', description: '', exhibition_id: '', tour_date: '', start_time: '', duration_minutes: '60', max_participants: '20' }); setActiveTab('tour-form'); setMenuOpen(false); }}>
+          <button className={activeTab === 'tour-form' ? 'active' : ''} onClick={openNewTourForm}>
             <PlusCircle size={19} /> Schedule Tour
           </button>
         </nav>
@@ -188,7 +281,7 @@ function TourGuideDashboard() {
 
         <section className="dashboard-content">
           {error && <div className="dashboard-error"><AlertCircle size={18} /> {error}</div>}
-          {loading && <div className="dashboard-loading"><LoaderCircle size={24} /><span>Loading your tours...</span></div>}
+          {loading && <div className="dashboard-loading"><LoaderCircle size={24} className="loading-spinner" /><span>Loading your tours...</span></div>}
 
           {!loading && activeTab === 'overview' && (
             <>
@@ -196,13 +289,14 @@ function TourGuideDashboard() {
                 <div>
                   <span className="eyebrow">GUIDED EXPERIENCES</span>
                   <h1>Welcome, <em>{firstName}.</em></h1>
-                  <p>Manage your schedule, create new tours, and welcome visitors to the gallery.</p>
+                  <p>Manage your schedule, confirm bookings, and welcome visitors to the gallery.</p>
                 </div>
                 <div className="welcome-icon"><MapPin size={38} /></div>
               </div>
               <div className="dashboard-stats">
-                <div className="stat-card"><div className="stat-icon"><CalendarDays size={21} /></div><span>Scheduled Tours</span><strong>{tours.length}</strong><small>Upcoming experiences</small></div>
-                <div className="stat-card"><div className="stat-icon"><Users size={21} /></div><span>Total Capacity</span><strong>{tours.reduce((sum, t) => sum + Number(t.max_participants || 0), 0)}</strong><small>Max visitors available</small></div>
+                <div className="stat-card"><div className="stat-icon"><CalendarDays size={21} /></div><span>Scheduled Tours</span><strong>{scheduledTours.length}</strong><small>Upcoming experiences</small></div>
+                <div className="stat-card"><div className="stat-icon"><Users size={21} /></div><span>Seats Booked</span><strong>{seatsBooked}</strong><small>Across scheduled tours</small></div>
+                <div className="stat-card"><div className="stat-icon"><ClipboardList size={21} /></div><span>Awaiting Confirmation</span><strong>{pendingRequests}</strong><small>Pending booking requests</small></div>
               </div>
             </>
           )}
@@ -210,41 +304,94 @@ function TourGuideDashboard() {
           {!loading && activeTab === 'my-tours' && (
             <section className="dashboard-section">
               <div className="section-heading">
-                <div><span className="eyebrow">YOUR SCHEDULE</span><h2>Upcoming Tours</h2></div>
-                <button onClick={() => { setEditingTourId(null); setTourData({ title: '', description: '', exhibition_id: '', tour_date: '', start_time: '', duration_minutes: '60', max_participants: '20' }); setActiveTab('tour-form'); }} className="primary-button header-book-btn"><PlusCircle size={16} /> New Tour</button>
+                <div><span className="eyebrow">YOUR SCHEDULE</span><h2>My Tours</h2></div>
+                <button onClick={openNewTourForm} className="primary-button header-book-btn"><PlusCircle size={16} /> New Tour</button>
               </div>
 
               {tours.length === 0 ? (
                 <div className="dashboard-empty">
                   <MapPin size={30} /><h3>No tours scheduled</h3>
-                  <button onClick={() => setActiveTab('tour-form')} className="primary-button">Schedule Tour <ArrowRight size={16} /></button>
+                  <button onClick={openNewTourForm} className="primary-button">Schedule Tour <ArrowRight size={16} /></button>
                 </div>
               ) : (
                 <div className="dashboard-bookings-list">
                   {tours.map((tour) => {
-                    const isCancelled = tour.status === 'Cancelled';
+                    const isScheduled = tour.status === 'Scheduled';
                     const booked = Number(tour.booked_seats || 0);
+                    const pending = Number(tour.pending_bookings || 0);
+                    const canComplete = isScheduled && String(tour.tour_date).slice(0, 10) <= today;
+                    const tourBookings = bookingsByTour[tour.tour_id] || [];
+
                     return (
-                      <div className="profile-card" key={tour.tour_id} style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', opacity: isCancelled ? 0.6 : 1 }}>
+                      <div className="profile-card tour-manage-card" key={tour.tour_id} style={{ opacity: isScheduled ? 1 : 0.7 }}>
                         <div className="profile-details" style={{ flex: 1 }}>
                           <h3>{tour.title}</h3>
-                          <p><CalendarDays size={14} style={{ display: 'inline', marginRight: '5px' }}/> {formatDate(tour.tour_date)}</p>
-                          <p><Clock size={14} style={{ display: 'inline', marginRight: '5px' }}/> {formatTime(tour.start_time)} ({tour.duration_minutes} mins)</p>
-                          <p style={{ marginTop: '10px', color: '#777168' }}>{tour.description}</p>
-                          <span className={`booking-status status-${isCancelled ? 'cancelled' : 'confirmed'}`} style={{ marginTop: '15px' }}>
-                            <Users size={16} /> {booked} / {tour.max_participants} booked
-                          </span>
-                          {isCancelled && <span style={{ marginLeft: '10px', color: '#b24c48', fontWeight: 'bold', fontSize: '12px' }}>CANCELLED</span>}
+                          <p><CalendarDays size={14} style={{ display: 'inline', marginRight: '5px' }} /> {formatDate(tour.tour_date)}</p>
+                          <p><Clock size={14} style={{ display: 'inline', marginRight: '5px' }} /> {formatTime(tour.start_time)} ({tour.duration_minutes} mins)</p>
+                          {tour.exhibition_title && <p><MapPin size={14} style={{ display: 'inline', marginRight: '5px' }} /> {tour.exhibition_title}</p>}
+                          {tour.description && <p style={{ marginTop: '10px', color: '#777168' }}>{tour.description}</p>}
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '15px' }}>
+                            <span className="booking-status status-scheduled" style={{ margin: 0 }}>
+                              <Users size={16} /> {booked} / {tour.max_participants} booked
+                            </span>
+                            {pending > 0 && isScheduled && (
+                              <span className="booking-status status-pending" style={{ margin: 0 }}>{pending} pending</span>
+                            )}
+                            {!isScheduled && (
+                              <span className={`booking-status status-${tour.status.toLowerCase()}`} style={{ margin: 0 }}>{tour.status}</span>
+                            )}
+                          </div>
                         </div>
-                        
-                        {!isCancelled && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', justifyContent: 'center' }}>
-                            <button onClick={() => handleEditClick(tour)} className="primary-button" style={{ padding: '8px 12px', fontSize: '11px', background: '#a47745' }}>
-                              <Edit size={14} /> Edit
-                            </button>
-                            <button onClick={() => handleCancelTour(tour.tour_id)} disabled={actionLoadingId === tour.tour_id} className="logout-button" style={{ padding: '8px 12px', fontSize: '11px', border: '1px solid #b24c48', borderRadius: '5px', color: '#b24c48', width: 'auto' }}>
-                              <Ban size={14} /> {actionLoadingId === tour.tour_id ? '...' : 'Cancel'}
-                            </button>
+
+                        <div className="tour-manage-actions">
+                          <button onClick={() => toggleBookings(tour.tour_id)} className="primary-button" style={{ padding: '8px 12px', fontSize: '11px', background: '#292721' }}>
+                            <ClipboardList size={14} /> {expandedTourId === tour.tour_id ? 'Hide bookings' : 'Bookings'}
+                          </button>
+                          {isScheduled && (
+                            <>
+                              <button onClick={() => handleEditClick(tour)} className="primary-button" style={{ padding: '8px 12px', fontSize: '11px' }}>
+                                <Edit size={14} /> Edit
+                              </button>
+                              {canComplete && (
+                                <button onClick={() => handleCompleteTour(tour.tour_id)} disabled={actionLoadingId === tour.tour_id} className="primary-button" style={{ padding: '8px 12px', fontSize: '11px', background: '#3f7d3c' }}>
+                                  <CheckCircle size={14} /> {actionLoadingId === tour.tour_id ? '...' : 'Complete'}
+                                </button>
+                              )}
+                              <button onClick={() => handleCancelTour(tour.tour_id)} disabled={actionLoadingId === tour.tour_id} className="logout-button" style={{ padding: '8px 12px', fontSize: '11px', border: '1px solid #b24c48', borderRadius: '5px', color: '#b24c48', width: 'auto' }}>
+                                <Ban size={14} /> {actionLoadingId === tour.tour_id ? '...' : 'Cancel'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {expandedTourId === tour.tour_id && (
+                          <div className="tour-bookings-panel">
+                            {bookingsLoadingId === tour.tour_id ? (
+                              <p className="tour-bookings-empty">Loading bookings...</p>
+                            ) : tourBookings.length === 0 ? (
+                              <p className="tour-bookings-empty">No bookings for this tour yet.</p>
+                            ) : (
+                              tourBookings.map((b) => (
+                                <div className="tour-booking-row" key={b.tour_booking_id}>
+                                  <div className="tour-booking-who">
+                                    <strong>{b.full_name}</strong>
+                                    <span>{b.email} · {b.number_of_participants} participant{b.number_of_participants > 1 ? 's' : ''}</span>
+                                  </div>
+                                  <span className={`booking-status status-${b.booking_status.toLowerCase()}`} style={{ margin: 0 }}>{b.booking_status}</span>
+                                  {isScheduled && b.booking_status === 'Pending' && (
+                                    <div className="tour-booking-actions">
+                                      <button disabled={bookingActionId === b.tour_booking_id} onClick={() => handleBookingStatus(tour, b, 'Confirmed')} className="tour-action-confirm">Confirm</button>
+                                      <button disabled={bookingActionId === b.tour_booking_id} onClick={() => handleBookingStatus(tour, b, 'Cancelled')} className="tour-action-decline">Decline</button>
+                                    </div>
+                                  )}
+                                  {isScheduled && b.booking_status === 'Confirmed' && (
+                                    <div className="tour-booking-actions">
+                                      <button disabled={bookingActionId === b.tour_booking_id} onClick={() => handleBookingStatus(tour, b, 'Cancelled')} className="tour-action-decline">Cancel</button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            )}
                           </div>
                         )}
                       </div>
@@ -265,42 +412,42 @@ function TourGuideDashboard() {
               </div>
 
               <form className="booking-card" onSubmit={handleSubmitTour} style={{ maxWidth: '800px' }}>
-                {formMessage && <div className={`booking-message ${formMessage.includes('success') ? 'success' : 'error'}`}>{formMessage}</div>}
+                {formMessage && <div className={`booking-message ${formSuccess ? 'success' : 'error'}`}>{formMessage}</div>}
 
                 <div className="booking-field">
                   <label>Tour Title</label>
-                  <input type="text" required placeholder="e.g., Modern African Art Walkthrough" value={tourData.title} onChange={e => setTourData({...tourData, title: e.target.value})} />
+                  <input type="text" required placeholder="e.g., Modern African Art Walkthrough" value={tourData.title} onChange={(e) => setTourData({ ...tourData, title: e.target.value })} />
                 </div>
 
                 <div className="booking-field">
                   <label>Description</label>
-                  <textarea rows="3" required placeholder="What will visitors experience?" value={tourData.description} onChange={e => setTourData({...tourData, description: e.target.value})} />
+                  <textarea rows="3" required placeholder="What will visitors experience?" value={tourData.description} onChange={(e) => setTourData({ ...tourData, description: e.target.value })} />
                 </div>
 
                 <div className="booking-field">
                   <label>Link to Exhibition (Optional)</label>
-                  <select value={tourData.exhibition_id} onChange={e => setTourData({...tourData, exhibition_id: e.target.value})} style={{ width: '100%', padding: '14px 16px', border: '1px solid #e8e3da', borderRadius: '6px', background: '#faf9f6', color: '#25231f', fontSize: '14px' }}>
+                  <select value={tourData.exhibition_id} onChange={(e) => setTourData({ ...tourData, exhibition_id: e.target.value })}>
                     <option value="">-- None --</option>
-                    {exhibitions.map(ex => <option key={ex.exhibition_id} value={ex.exhibition_id}>{ex.title}</option>)}
+                    {exhibitions.map((ex) => <option key={ex.exhibition_id} value={ex.exhibition_id}>{ex.title}</option>)}
                   </select>
                 </div>
 
                 <div className="dashboard-form-grid">
                   <div className="booking-field">
                     <label>Date</label>
-                    <input type="date" required value={tourData.tour_date} onChange={e => setTourData({...tourData, tour_date: e.target.value})} />
+                    <input type="date" required min={today} value={tourData.tour_date} onChange={(e) => setTourData({ ...tourData, tour_date: e.target.value })} />
                   </div>
                   <div className="booking-field">
                     <label>Start Time</label>
-                    <input type="time" required value={tourData.start_time} onChange={e => setTourData({...tourData, start_time: e.target.value})} />
+                    <input type="time" required value={tourData.start_time} onChange={(e) => setTourData({ ...tourData, start_time: e.target.value })} />
                   </div>
                   <div className="booking-field">
                     <label>Duration (minutes)</label>
-                    <input type="number" min="15" max="480" required value={tourData.duration_minutes} onChange={e => setTourData({...tourData, duration_minutes: e.target.value})} />
+                    <input type="number" min="15" max="480" required value={tourData.duration_minutes} onChange={(e) => setTourData({ ...tourData, duration_minutes: e.target.value })} />
                   </div>
                   <div className="booking-field">
                     <label>Max Participants</label>
-                    <input type="number" min="1" max="200" required value={tourData.max_participants} onChange={e => setTourData({...tourData, max_participants: e.target.value})} />
+                    <input type="number" min="1" max="200" required value={tourData.max_participants} onChange={(e) => setTourData({ ...tourData, max_participants: e.target.value })} />
                   </div>
                 </div>
 
@@ -309,7 +456,7 @@ function TourGuideDashboard() {
                     {formLoading ? 'Saving...' : editingTourId ? 'Save Changes' : 'Schedule Tour'}
                   </button>
                   {editingTourId && (
-                    <button type="button" className="logout-button" onClick={() => setActiveTab('my-tours')} style={{ width: 'auto', padding: '14px 20px', border: '1px solid #e8e3da' }}>
+                    <button type="button" className="logout-button" onClick={() => { setEditingTourId(null); setTourData(EMPTY_TOUR); setFormMessage(''); setActiveTab('my-tours'); }} style={{ width: 'auto', padding: '14px 20px', border: '1px solid #e8e3da', color: '#25231f' }}>
                       Cancel Edit
                     </button>
                   )}
